@@ -1,11 +1,16 @@
-import logging
+import logging, os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 from infoWeather import *
 
 # Leggi il token dal file
-with open("tokenBot.txt", 'r') as tkn:
-    TOKEN = tkn.read()
+#with open("tokenBot.txt", 'r') as tkn:
+#    TOKEN = tkn.read()
+
+# Leggi il token dal file specificato dalla variabile di ambiente
+telegram_token_file = os.environ.get("TELEGRAM_TOKEN_FILE", "tokenBot.txt")
+with open(telegram_token_file, 'r') as tkn:
+    TELEGRAM_TOKEN = tkn.read()
 
 # Configura il logging
 logging.basicConfig(

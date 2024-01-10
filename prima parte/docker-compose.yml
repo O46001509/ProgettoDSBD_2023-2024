@@ -48,24 +48,28 @@ services:
     build:
       context: ./consumer
       dockerfile: Dockerfile
-    volumes: 
-      - ./consumer/prova.txt:/app/prova.txt 
+    environment:
+      - POSTGRES_HOST=nome_host
+      - POSTGRES_DB=nome_database
+      - POSTGRES_USER=nome_utente
+      - POSTGRES_PASSWORD=password
     depends_on:
       - kafka
     restart: on-failure
-    # networks:
-    #   - kafka-net
 
   producer:
     build:
       context: ./producer
       dockerfile: Dockerfile
+    environment:
+      - TELEGRAM_TOKEN_FILE=/app/tokenBot.txt
+      - OPENWEATHERMAP_API_KEY_FILE=/app/apiKey.txt
+    volumes: 
+      - ./producer/tokenBot.txt:/app/tokenBot.txt
+      - ./producer/apiKey.txt:/app/apiKey.txt
     depends_on:
       - kafka
-      # - consumer
     restart: on-failure
-    # networks:
-    #   - kafka-net
 
   
 

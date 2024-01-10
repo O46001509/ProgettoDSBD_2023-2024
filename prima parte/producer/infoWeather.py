@@ -1,5 +1,5 @@
 from kafka import KafkaProducer
-import time, json
+import time, json, os
 from random import choice
 
 import datetime as dt
@@ -10,7 +10,14 @@ def return_weather(city):
     # Innanzitutto specifichiamo l'URL di base a cui inviamo le richieste
     BASE_URL = "http://api.openweathermap.org/data/2.5/weather?"
     # quindi l'api key che recupero dal txt
-    API_KEY = open('apiKey.txt','r').read()
+    #API_KEY = open('apiKey.txt','r').read()
+    
+    
+    # Leggi la chiave API dal file specificato dalla variabile di ambiente
+    openweathermap_api_key_file = os.environ.get("OPENWEATHERMAP_API_KEY_FILE", "apiKey.txt")
+    with open(openweathermap_api_key_file, 'r') as api_key_file:
+        API_KEY = api_key_file.read()
+    
     # e la città di cui vogliamo ottenere i dati
     CITY = city
 
