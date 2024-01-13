@@ -8,10 +8,11 @@ from infoWeather import *
 #    TOKEN = tkn.read()
 
 # Leggi il token dal file specificato dalla variabile di ambiente se è presente
-telegram_token_file = os.environ.get("TELEGRAM_TOKEN_FILE", "tokenBot.txt")
-with open(telegram_token_file, 'r') as tkn:
-    TELEGRAM_TOKEN = tkn.read()
+# telegram_token_file = os.environ.get("TELEGRAM_TOKEN_FILE", "tokenBot2.txt")
+# with open(telegram_token_file, 'r') as tkn:
+#     TELEGRAM_TOKEN = tkn.read()
 
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN_FILE", "NO_VARIABLE_FOUND")
 # Configura il logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',

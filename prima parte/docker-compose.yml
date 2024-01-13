@@ -31,6 +31,10 @@ services:
     container_name: postgres
     ports:
       - 5432:5432
+    environment:
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
 
@@ -53,11 +57,12 @@ services:
       context: ./producer
       dockerfile: Dockerfile
     environment:
-      - TELEGRAM_TOKEN_FILE=/app/tokenBot.txt
-      - OPENWEATHERMAP_API_KEY_FILE=/app/apiKey.txt
-    volumes: 
-      - ./producer/tokenBot.txt:/app/tokenBot.txt
-      - ./producer/apiKey.txt:/app/apiKey.txt
+      - TELEGRAM_TOKEN_FILE=${TELEGRAM_TOKEN_FILE}
+      - OPENWEATHERMAP_API_KEY_FILE=${OPENWEATHERMAP_API_KEY_FILE}
+    # volumes: 
+    #   - ./producer/tokenBot2.txt:/app/tokenBot2.txt
+    #   - ./producer/apiKey2.txt:/app/apiKey2.txt
+
     depends_on:
       - kafka
     restart: on-failure

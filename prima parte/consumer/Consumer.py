@@ -1,10 +1,20 @@
 import psycopg2
+import os, time
 from kafka import KafkaConsumer
-from db_operations import *
+from db_scripts.db_operations import *
+
+host = os.environ.get('POSTGRES_HOST','NO VARIABLE POSTGRES_HOST'),
+user = os.environ.get('POSTGRES_USER','NO VARIABLE POSTGRES_USER'),
+password = os.environ.get('POSTGRES_PASSWORD','NO VARIABLE POSTGRES_PASSWORD'),
+database = os.environ.get('POSTGRES_DATABASE','NO VARIABLE POSTGRES_DATABASE')
+
+
+time.sleep(10)
+
 
 try:
     # Connessione iniziale al database
-    conn, cur = initialize_database_connection()
+    conn, cur = initialize_database_connection(host[0], user[0], password[0], database)
 
     # Crea la tabella degli utenti se non esiste già
     cur.execute("""
@@ -32,13 +42,13 @@ try:
         );
     """)
 
-
+   
     # Committa le modifiche al database
     conn.commit()
 
     # Chiudi la connessione iniziale al database
     close_database_connection(conn, cur)
-
+    
     # Configurazione Kafka
     bootstrap_servers = 'kafka:9092'
     topic_name = 'example-topic'
@@ -46,21 +56,22 @@ try:
     # Connessione al consumer Kafka
     consumer = KafkaConsumer(topic_name, 
                              bootstrap_servers=bootstrap_servers)
-
+   
     # Connessione al database PostgreSQL
-    conn, cur = initialize_database_connection()
-
+    conn, cur = initialize_database_connection(host[0], user[0], password[0], database)
+   
     try:
         for message in consumer:
-            user_name, city = message.value.decode('utf-8').split(',')
-
+            
+            user_name, city = message.value.decode('utf-8').split(",")
+           
             try:
-                user_id = insert_user(user_name)
-                city_id = insert_city(city)
-
+                user_id = insert_user(user_name, conn, cur)
+                city_id = insert_city(city, conn, cur)
+                
                 if user_id and city_id:
-                    insert_user_city_relation(user_id, city_id)
-
+                    insert_user_city_relation(user_id, city_id, conn, cur)
+                    
                     # Committa le modifiche al database
                     conn.commit()
 

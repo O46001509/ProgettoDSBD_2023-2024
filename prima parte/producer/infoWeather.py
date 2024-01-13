@@ -14,10 +14,10 @@ def return_weather(city):
     
     
     # Leggi la chiave API dal file specificato dalla variabile di ambiente
-    openweathermap_api_key_file = os.environ.get("OPENWEATHERMAP_API_KEY_FILE", "apiKey.txt")
-    with open(openweathermap_api_key_file, 'r') as api_key_file:
-        API_KEY = api_key_file.read()
-    
+    # openweathermap_api_key_file = os.environ.get("OPENWEATHERMAP_API_KEY_FILE", "apiKey2.txt")
+    # with open(openweathermap_api_key_file, 'r') as api_key_file:
+        # API_KEY = api_key_file.read()
+    API_KEY = os.environ.get("OPENWEATHERMAP_API_KEY_FILE", "NO_VARIABLE_FOUND")
     # e la città di cui vogliamo ottenere i dati
     CITY = city
 
@@ -58,13 +58,14 @@ def publish_on_topic(user, city):
     producer = KafkaProducer(
     bootstrap_servers=bootstrap_servers)
 
-    message = (user, city)
-    for i in message:
+    message = str(user) + "," + str(city)
+    #for i in message:
 
         # message = f"Message {i}"
-        message = i
-        producer.send(topic_name, value=message.encode('utf-8'))
-        print(f"Produced: {message}")
-        time.sleep(1)
+        #message = i
+    print(f"Message: {message}")
+    producer.send(topic_name, value=message.encode('utf-8'))
+    print(f"Produced: {message}")
+    time.sleep(1)
         
     producer.close()
