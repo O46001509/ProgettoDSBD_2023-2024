@@ -1,16 +1,16 @@
 import psycopg2, os
 
-host = os.environ.get("POSTGRES_HOST", "nome_host")
-db = os.environ.get("POSTGRES_DB", "nome_database")
-user = os.environ.get("POSTGRES_USER", "nome_utente")
-password = os.environ.get("POSTGRES_PASSWORD", "password")
+# host = os.environ.get("POSTGRES_HOST", "nome_host")
+# db = os.environ.get("POSTGRES_DB", "nome_database")
+# user = os.environ.get("POSTGRES_USER", "nome_utente")
+# password = os.environ.get("POSTGRES_PASSWORD", "password")
 
 def initialize_database_connection():
     conn = psycopg2.connect(
-        host="nome_host",
-        database="nome_database",
-        user="nome_utente",
-        password="password"
+        host = os.environ.get('POSTGRES_HOST','NO VARIABLE POSTGRES_HOST'),
+        user = os.environ.get('POSTGRES_USER','NO VARIABLE POSTGRES_USER'),
+        password = os.environ.get('POSTGRES_PASSWORD','NO VARIABLE POSTGRES_PASSWORD'),
+        database = os.environ.get('POSTGRES_DATABASE','NO VARIABLE POSTGRES_DATABASE')
     )
     cur = conn.cursor()
     return conn, cur
