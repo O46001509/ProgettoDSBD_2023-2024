@@ -66,4 +66,5 @@ def publish_on_topic(user, city):
         producer.send(topic_name, value=message.encode('utf-8'))
         print(f"Produced: {message}")
         time.sleep(1)
+        
     producer.close()
