@@ -1,4 +1,3 @@
-import psycopg2
 import os, time
 from kafka import KafkaConsumer
 from db_scripts.db_operations import *
@@ -8,77 +7,46 @@ user = os.environ.get('POSTGRES_USER','NO VARIABLE POSTGRES_USER'),
 password = os.environ.get('POSTGRES_PASSWORD','NO VARIABLE POSTGRES_PASSWORD'),
 database = os.environ.get('POSTGRES_DATABASE','NO VARIABLE POSTGRES_DATABASE')
 
-
+# Delay inserito per evitare che Consumer interagisca con datebase prima che servizio postgres è in esecuzione
 time.sleep(10)
 
-
 try:
-    # Connessione iniziale al database
+    
     conn, cur = initialize_database_connection(host[0], user[0], password[0], database)
 
-    # Crea la tabella degli utenti se non esiste già
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            user_name VARCHAR(255) UNIQUE
-        );
-    """)
-
-    # Crea la tabella delle città se non esiste già
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS cities (
-            id SERIAL PRIMARY KEY,
-            city_name VARCHAR(255) UNIQUE
-        );
-    """)
-
-    # Crea la terza tabella se non esiste già
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS user_city_relations (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id),
-            city_id INTEGER REFERENCES cities(id),
-            CONSTRAINT unique_user_city_relation UNIQUE (user_id, city_id)
-        );
-    """)
-
-   
-    # Committa le modifiche al database
+    create_users(cur)
+    create_cities(cur)
+    create_user_city_relations(cur)
+    
+    # Committo le modifiche al database
     conn.commit()
 
-    # Chiudi la connessione iniziale al database
     close_database_connection(conn, cur)
     
-    # Configurazione Kafka
     bootstrap_servers = 'kafka:9092'
     topic_name = 'example-topic'
 
-    # Connessione al consumer Kafka
     consumer = KafkaConsumer(topic_name, 
                              bootstrap_servers=bootstrap_servers)
    
-    # Connessione al database PostgreSQL
     conn, cur = initialize_database_connection(host[0], user[0], password[0], database)
-   
     try:
         for message in consumer:
-            
-            user_name, city = message.value.decode('utf-8').split(",")
+            print(f"messaggio: {message.value.decode('utf-8')}")
+            # Leggo i valori pubblicati nel topic
+            user_name, city, chat_id, tmp, feel_tmp, hum, weather, wind, sub_period, notify_freq = message.value.decode('utf-8').split(",")  # Aggiunta dei campi interi
            
             try:
-                user_id = insert_user(user_name, conn, cur)
-                city_id = insert_city(city, conn, cur)
+                user_id = insert_user(user_name, chat_id, cur)
+                city_id = insert_city(city, cur, tmp, feel_tmp, hum, weather, wind)
                 
                 if user_id and city_id:
-                    insert_user_city_relation(user_id, city_id, conn, cur)
+                    insert_user_city_relation(user_id, city_id, sub_period, notify_freq, cur) 
                     
-                    # Committa le modifiche al database
                     conn.commit()
 
-                    # Conferma la transazione in Kafka
+                    # Confermo la transazione in Kafka
                     consumer.commit()
-
-                # Esegui altre azioni se necessario...
 
             except Exception as e:
                 # Rollback in caso di errore
@@ -86,11 +54,11 @@ try:
                 print(f"Errore durante l'inserimento nel database: {e}")
 
     finally:
-        # Chiudi la connessione al database e il consumer alla fine dello script
+        # Chiudo la connessione al database e il consumer alla fine dello script
         close_database_connection(conn, cur)
         consumer.close()
-
 except Exception as e:
     print(f"Errore generale: {e}")
 
+    
 

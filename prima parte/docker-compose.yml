@@ -59,13 +59,29 @@ services:
     environment:
       - TELEGRAM_TOKEN_FILE=${TELEGRAM_TOKEN_FILE}
       - OPENWEATHERMAP_API_KEY_FILE=${OPENWEATHERMAP_API_KEY_FILE}
-    # volumes: 
-    #   - ./producer/tokenBot2.txt:/app/tokenBot2.txt
-    #   - ./producer/apiKey2.txt:/app/apiKey2.txt
 
     depends_on:
       - kafka
     restart: on-failure
+
+  weather_notifier: 
+    build:
+      context: ./weather_notifier
+      dockerfile: Dockerfile
+    volumes: 
+      - ./weather_notifier/db_scripts/prova.txt:/app/db_scripts/prova.txt 
+    environment:
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE}
+      - TELEGRAM_TOKEN_FILE=${TELEGRAM_TOKEN_FILE}
+      - OPENWEATHERMAP_API_KEY_FILE=${OPENWEATHERMAP_API_KEY_FILE}
+    depends_on:
+      - postgres  
+      - consumer
+    restart: on-failure
+   
 
 
 
