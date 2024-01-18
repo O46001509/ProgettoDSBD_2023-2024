@@ -1,6 +1,6 @@
 import datetime as dt
 import requests
-import os
+import os, time
 
 
 def return_weather(city):
@@ -41,11 +41,21 @@ def return_weather(city):
         f"Temperature in {CITY} feels_like: {fl_celsius:.2f}°C or {fl_fahr:.2f}°F",
         f"Humidity in {CITY}: {humidity}%",
         f"General weather in {CITY}: {description}",
-        f"Wind speed in {CITY}: {wind_speed*3.6}km/h",
+        f"Wind speed in {CITY}: {(wind_speed*3.6):.2f}km/h",
         f"Sun rises in {CITY} at {sunrise_time} local time.",
         f"Sun sets in {CITY} at {sunset_time} local time."
     ]
     return info_meteo
+
+def stampa_ora_attuale():
+    # Ottenere l'ora attuale come oggetto struct_time
+    ora_attuale_struct = time.localtime()
+
+    # Estrarre solo l'ora
+    ora_attuale = ora_attuale_struct.tm_hour+1
+    minuti_attuali = ora_attuale_struct.tm_min
+    secondi_attuali = ora_attuale_struct.tm_sec
+    return f'Current time: {ora_attuale:02d}:{minuti_attuali:02d}:{secondi_attuali:02d}'
 
 def select_constraint_from_info_weather(info_meteo, city_constraints):
     info_meteo_costraint = []

@@ -171,7 +171,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Pubblico i dati della sottoscrizione sul topic
                 publish_on_topic(user_name, user_city, chat_id,tmp, feel_tmp, hum, weather, wind, sub_period, notify_freq)
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Great! Notifications will be updated every {interval_seconds} seconds.")
-
+                print(f"Type: {type(sub_period)}")
+                time.sleep(((sub_period[0]*60)) + 5)
                 # Chiedo all'utente di inserire "stop" dopo la ricezione delle notifiche
                 await context.bot.send_message(chat_id=update.effective_chat.id, text="To stop receiving notifications, type 'stop'. Otherwise, continue with your preferences.")
 

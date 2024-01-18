@@ -28,20 +28,20 @@ async def send_message_async(chat_id, text):
     await bot.send_message(chat_id=chat_id, text=text)
     
 # Funzione per gestire la conversazione dopo la scelta dell'intervallo di tempo dell'utente
-def handle_subscription(chat_id, tmp, city_name, interval_seconds, sub_period):
+def handle_subscription(chat_id, city_name, interval_seconds, sub_period, city_constraints):
     # Imposto il valore desiderato in minuti
     sub_period_seconds = sub_period * 60  # Conversione in secondi
 
     start_time = time.time()
     end_time = start_time + sub_period_seconds  # Calcolo il tempo di fine
     while time.time() < end_time:
-        # Verifico se l'utente ha richiesto di fermare le notifiche
-        if user_states.get(chat_id) == 'stop':
-            send_message(chat_id, text="Hai interrotto le notifiche.")
-            break
 
+        # Richiesta meteo al sito openWeatherMap
+        info_weather = return_weather(city_name)
+
+        info_weather_constraint = select_constraint_from_info_weather(info_weather, city_constraints)
         # Invio messaggio ogni notify_freq secondi
-        text=f"Interval event: {interval_seconds} seconds. Current weather in {city_name}: {tmp}"
+        text=f"Interval event: {interval_seconds} seconds. Current weather in {city_name}: {info_weather_constraint}\n {stampa_ora_attuale()}"
         asyncio.run(send_message_async(chat_id, text))
 
         time.sleep(interval_seconds)
@@ -70,17 +70,16 @@ while True:
             chat_id = get_chat_id_for_user(cur, last_search[0])
             city_name, city_constraints = get_city_info(cur, last_search[1])      
 
-            # Richiesta meteo al sito openWeatherMap
-            info_weather = return_weather(city_name)
+          
 
             # Usiamo il file prova.txt solo per dei test
             with open("db_scripts/prova.txt", 'w') as file_output:
                 file_output.write(f"City_id: {last_search[1]}, user_id {last_search[0]}, sub_period{last_search[2]}")
 
                 
-            info_weather_constraint = select_constraint_from_info_weather(info_weather, city_constraints)
+            
                 
-            handle_subscription(chat_id, info_weather_constraint, city_name, notify_freq, sub_period)
+            handle_subscription(chat_id, city_name, notify_freq, sub_period, city_constraints)
 
             # Aggiorno la vecchia mappa con la nuova mappa
             old_mappa_ricerche = nuova_mappa_ricerche

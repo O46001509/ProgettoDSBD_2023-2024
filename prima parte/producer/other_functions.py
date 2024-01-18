@@ -42,7 +42,7 @@ def return_weather(city):
         f"Temperature in {CITY} feels_like: {fl_celsius:.2f}°C or {fl_fahr:.2f}°F",
         f"Humidity in {CITY}: {humidity}%",
         f"General weather in {CITY}: {description}",
-        f"Wind speed in {CITY}: {wind_speed*3.6}km/h",
+        f"Wind speed in {CITY}: {(wind_speed*3.6):.2f}km/h",
         f"Sun rises in {CITY} at {sunrise_time} local time.",
         f"Sun sets in {CITY} at {sunset_time} local time."
     ]
