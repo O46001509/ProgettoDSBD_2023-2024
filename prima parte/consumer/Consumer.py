@@ -7,7 +7,8 @@ user = os.environ.get('POSTGRES_USER','NO VARIABLE POSTGRES_USER'),
 password = os.environ.get('POSTGRES_PASSWORD','NO VARIABLE POSTGRES_PASSWORD'),
 database = os.environ.get('POSTGRES_DATABASE','NO VARIABLE POSTGRES_DATABASE')
 
-# Delay inserito per evitare che Consumer interagisca con datebase prima che servizio postgres è in esecuzione
+# Delay inserito per evitare che Consumer interagisca con datebase prima che il 
+# servizio postgres è in esecuzione
 time.sleep(10)
 
 try:
