@@ -56,7 +56,11 @@ graph TB
     style A fill:#fff,stroke:#000,stroke-width:2px,stroke-dasharray:5
 
     user1((utente)) -->|/start sign-up| I
-    I --> |Send-notification| user1
+    I --> |Send-notification| user1 -->|API:5001/subscriptions?username&city&conditions| C
+
+    style user1 fill:#0f0,stroke-width:2px,stroke-dasharray:0
+    style I fill:#f09,stroke-width:0px
+    style O fill:#f09,stroke-width:0px
 ```
 
 ## Installazione
