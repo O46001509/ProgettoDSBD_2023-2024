@@ -1,0 +1,27 @@
+global:
+  scrape_interval: 15s  # Intervallo di scraping globale
+
+scrape_configs:
+  - job_name: 'weather-event-notifier'
+    static_configs:
+      - targets: ['weather-event-notifier:5001']  # Sostituisci con il nome del servizio e la porta corretti
+  
+  - job_name: 'sla-manager'
+    static_configs: 
+      - targets: ['sla-manager:5005']
+          
+
+
+  # - job_name: 'weather-data-fetcher'
+  #   static_configs:
+  #     - targets: ['weather-data-fetcher:5002']  # Sostituisci con il nome del servizio e la porta corretti
+
+  # - job_name: 'notification-service'
+  #   static_configs:
+  #     - targets: ['notification-service:5000']  # Sostituisci con il nome del servizio e la porta corretti
+
+  # - job_name: 'prometheus'
+  #   static_configs:
+  #     - targets: ['prometheus:9091']  # Sostituisci con il nome del servizio e la porta corretti
+
+  # Aggiungi altre configurazioni per gli altri servizi
