@@ -1,87 +1,93 @@
 version: '3'
+
 services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:latest
-    user: "0:0"
-    container_name: zookeeper
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-
-  kafka:
-    image: confluentinc/cp-kafka:latest
-    user: "0:0"
-    container_name: kafka
-    ports:
-      - "9093:9093"
-    environment:
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: INSIDE://0.0.0.0:9092,OUTSIDE://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:9092,OUTSIDE://localhost:9093
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
-      KAFKA_CREATE_TOPICS: "example-topic:1:1"
-    depends_on:
-      - zookeeper
-
   postgres:
-    image: postgres:16.1 
-    container_name: postgres
-    ports:
-      - 5432:5432
-    environment:
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      
-    volumes:
-      - ./postgres-data:/var/lib/postgresql/data
+      image: postgres:16.1 
+      container_name: postgres
+      ports:
+        - 5432:5432
+      environment:
+        - POSTGRES_HOST=${POSTGRES_HOST}
+        - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+        - POSTGRES_DATABASE=${POSTGRES_DATABASE}
+        - POSTGRES_USER=${POSTGRES_USER}
+        
+      volumes:
+        - ./postgres-data:/var/lib/postgresql/data
+      networks:
+        - weather-net
 
-  consumer:
-    build:
-      context: ./consumer
-      dockerfile: Dockerfile
+  database-service:
+    build: ./database_service
     environment:
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DATABASE=${POSTGRES_DATABASE}
+    ports: 
+      - "5004:5004"
     depends_on:
-      - kafka
+      - postgres
+    networks:
+      - weather-net
+    restart: on-failure
+
+  weather-event-notifier:
+    build:
+      context: ./weather-event-notifier
+      dockerfile: Dockerfile
+    # environment:
+    #   - TELEGRAM_TOKEN_FILE=${TELEGRAM_TOKEN_FILE}
+    ports:
+      - "5001:5001"
+    networks:
+      - weather-net
+    depends_on:
       - postgres
     restart: on-failure
 
-  producer:
+  notification-service:
     build:
-      context: ./producer
+      context: ./notification-service
       dockerfile: Dockerfile
     environment:
       - TELEGRAM_TOKEN_FILE=${TELEGRAM_TOKEN_FILE}
-      - OPENWEATHERMAP_API_KEY_FILE=${OPENWEATHERMAP_API_KEY_FILE}
-
+    ports:
+      - "5000:5000"
+    networks:
+      - weather-net
     depends_on:
-      - kafka
+      - postgres
     restart: on-failure
 
-  weather_notifier: 
+  weather-data-fetcher:
     build:
-      context: ./weather_notifier
+      context: ./weather-data-fetcher
       dockerfile: Dockerfile
-    volumes: 
-      - ./weather_notifier/db_scripts/prova.txt:/app/db_scripts/prova.txt 
     environment:
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DATABASE=${POSTGRES_DATABASE}
-      - TELEGRAM_TOKEN_FILE=${TELEGRAM_TOKEN_FILE}
       - OPENWEATHERMAP_API_KEY_FILE=${OPENWEATHERMAP_API_KEY_FILE}
+    networks:
+      - weather-net
     depends_on:
-      - postgres  
-      - consumer
+      - postgres
+      - weather-event-notifier
     restart: on-failure
-   
+  
+  handle-users:
+    build:
+      context: ./handle-users
+      dockerfile: Dockerfile
+    environment:
+      - TELEGRAM_TOKEN_FILE=${TELEGRAM_TOKEN_FILE}
+    networks:
+      - weather-net
+    depends_on:
+      - postgres
+      - weather-event-notifier
+    restart: on-failure
+
+networks:
+  weather-net:
 
 
 

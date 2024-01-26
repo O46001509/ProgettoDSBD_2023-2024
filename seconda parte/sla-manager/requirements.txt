@@ -3,3 +3,4 @@ requests
 python-telegram-bot==20.7
 prometheus_flask_exporter
 prometheus_client
+apscheduler

@@ -1,17 +1,27 @@
-from flask import Flask, request, jsonify, abort
+from flask import Flask, request, jsonify, Response
 import requests
 import os, time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
+from prometheus_flask_exporter import PrometheusMetrics
+from apscheduler.schedulers.background import BackgroundScheduler
 
+logging.basicConfig(level=logging.INFO)
+
+time.sleep(4)
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
-time.sleep(4)
+
+# Configura le metriche Prometheus
+metrics = PrometheusMetrics(app)
+
 # Configurazione microservizio database e Prometheus
 DATABASE_SERVICE_URL = os.environ.get('DATABASE_SERVICE_URL', 'http://database-service:5004')
 PROMETHEUS_URL = os.environ.get('PROMETHEUS_URL', 'http://prometheus:9090')
+SLA_CPU_USAGE_THRESHOLD = 0.7  # 70% di utilizzo della CPU
 
+# Inizializzazione del Scheduler per attività pianificate
+scheduler = BackgroundScheduler()
 
 def create_sla_definitions_table():
     try:
@@ -32,12 +42,21 @@ def create_sla_violations_table():
 create_sla_definitions_table()
 create_sla_violations_table()
 
+
+
+
+# Endpoint /metrics per esporre le metriche a Prometheus
+@app.route('/metrics')
+def metrics():
+    from prometheus_client import generate_latest
+    return Response(generate_latest(), mimetype='text/plain')
+
  #Aggiunta di una definizione di SLA di esempio all'avvio
 def add_example_sla_definition():
     example_sla_metric = {
-        'metric_name': 'response_time',  # Nome della metrica
-        'threshold': 0.300,  # Soglia di 300ms per il tempo di risposta
-        'description': 'Tempo massimo di risposta accettabile'
+        'metric_name': 'fetch_weather_requests_total',  # Nome della metrica
+        'threshold': 3,  # 
+        'description': 'Numero massimo di richieste di dati meteorologici ammesse per evitare il sovraccarico del servizio'
     }
     try:
         response = requests.post(f"{DATABASE_SERVICE_URL}/add_sla_metric", json=example_sla_metric)
@@ -46,7 +65,7 @@ def add_example_sla_definition():
     except requests.exceptions.RequestException as e:
         logging.error(f"Errore durante l'aggiunta della definizione di SLA di esempio: {e}")
 
-add_example_sla_definition()
+#add_example_sla_definition()
 
 # Endpoint per la gestione degli SLA
 @app.route('/sla', methods=['POST', 'GET', 'PUT', 'DELETE'])
@@ -91,44 +110,66 @@ def sla_probability():
     # probability = calculate_probability_of_violation(metric_name)
     # return jsonify({'metric_name': metric_name, 'probability': probability})
 
-# Funzione per recuperare il valore attuale di una metrica da Prometheus
 def fetch_metric_value(metric_name):
-    # Recupera il valore attuale di una metrica da Prometheus
-    prometheus_query_url = f"{PROMETHEUS_URL}/api/v1/query"
-    query = {'query': metric_name}
-    response = requests.get(prometheus_query_url, params=query)
-    if response.status_code == 200:
+    try:
+        prometheus_query_url = f"{PROMETHEUS_URL}/api/v1/query"
+        query = {'query': metric_name}
+        response = requests.get(prometheus_query_url, params=query)
+        response.raise_for_status()
         data = response.json()['data']['result']
         if data:
             return data[0]['value'][1]  # Valore attuale della metrica
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Errore durante il recupero del valore della metrica {metric_name}: {e}")
     return None
 
+def fetch_prometheus_query(query):
+    try:
+        response = requests.get(f'{PROMETHEUS_URL}/api/v1/query', params={'query': query})
+        response.raise_for_status()
+        results = response.json()['data']['result']
+        return results
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Errore durante l'esecuzione della query Prometheus {query}: {e}")
+        return []
+
+def check_cpu_usage():
+    try:
+        query = 'job:cpu_usage:avg_over_time_5m'
+        results = fetch_prometheus_query(query)
+        for result in results:
+            cpu_usage = 1 - float(result['value'][1])  # Considerando l'utilizzo come 1 - idle
+            if cpu_usage > SLA_CPU_USAGE_THRESHOLD:
+                logging.warning(f'Alert: High CPU usage detected: {cpu_usage * 100:.2f}%')
+                # Qui puoi implementare azioni correttive o inviare notifiche
+    except Exception as e:
+        logging.error(f"Errore durante il controllo dell'utilizzo della CPU: {e}")
+
 def evaluate_sla():
-    # Valuta tutte le metriche SLA rispetto ai valori attuali
-    sla_metrics = requests.get(f"{DATABASE_SERVICE_URL}/get_sla_metrics").json()
-    for metric in sla_metrics:
-        metric_name = metric['metric_name']
-        actual_value = fetch_metric_value(metric_name)
-        
-        if actual_value and float(actual_value) > metric['threshold']:
-            # Registra la violazione
-            violation_data = {
-                'sla_id': metric['sla_id'],
-                'violation_time': datetime.utcnow(),
-                'actual_value': actual_value
-            }
-            requests.post(f"{DATABASE_SERVICE_URL}/record_sla_violation", json=violation_data)
-            logging.info(f"Violazione SLA registrata: {metric_name} con valore {actual_value}")
+    try:
+        sla_metrics = requests.get(f"{DATABASE_SERVICE_URL}/get_sla_metrics").json()
+        for metric in sla_metrics:
+            metric_name = metric['metric_name']
+            actual_value = fetch_metric_value(metric_name)
+            
+            if actual_value is not None and float(actual_value) > float(metric['threshold']):
+                # Registra la violazione
+                violation_data = {
+                    'sla_id': metric['sla_id'],
+                    'violation_time': datetime.utcnow().isoformat(),  # Converti datetime in una stringa ISO
+                    'actual_value': actual_value
+                }
+                requests.post(f"{DATABASE_SERVICE_URL}/record_sla_violation", json=violation_data)
+                logging.info(f"Violazione SLA registrata: {metric_name} con valore {actual_value}")
+    except Exception as e:
+        logging.error(f"Errore durante la valutazione delle SLA: {e}")
+
 
 # Schedulazione della valutazione SLA ad intervalli regolari
 def schedule_sla_evaluation():
-    # Schedula la valutazione SLA ad intervalli regolari
-    # Questo potrebbe essere implementato utilizzando APScheduler o un ciclo while con sleep
-    # Pseudocodice:
-    # while True:
-    #     evaluate_sla()
-    #     time.sleep(INTERVAL)
-    pass
+    scheduler.add_job(evaluate_sla, 'interval', minutes=1)  # Esegue ogni minuto
+    scheduler.add_job(check_cpu_usage, 'interval', minutes=1)  # Esegue ogni minuto
+    scheduler.start()
 
 @app.route('/sla/status', methods=['GET'])
 def get_sla_status():
@@ -137,7 +178,7 @@ def get_sla_status():
         sla_status = []
         for metric in sla_metrics:
             actual_value = fetch_metric_value(metric['metric_name'])
-            is_violated = float(actual_value) > metric['threshold'] if actual_value is not None else None
+            is_violated = float(actual_value) > float(metric['threshold']) if actual_value is not None else None
             sla_status.append({
                 'metric_name': metric['metric_name'],
                 'actual_value': actual_value,

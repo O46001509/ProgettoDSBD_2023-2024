@@ -3,7 +3,11 @@ import time, os, logging
 import datetime as dt
 from openweather_wrapper import OpenWeatherWrapper
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 time.sleep(5)
 
@@ -69,7 +73,7 @@ def fetch_weather_data(city):
 
 # Verifica delle condizioni specificate nella sottoscrizione sono soddisfatte
 def check_conditions(subscription, weather_data):
-    logging.info(f"Weather-data-fetcher --> subscription inside check_conditions: {subscription}, weather_data: {weather_data}")
+    # logging.info(f"Weather-data-fetcher --> subscription inside check_conditions: {subscription}, weather_data: {weather_data}")
     temperature_max = subscription['condizioni']['temperatura_massima']
     temperatura_minima = subscription['condizioni']['temperatura_minima']
     vento_max = subscription['condizioni']['vento_max']
@@ -87,7 +91,7 @@ def main():
             user_names_url = 'http://weather-event-notifier:5001/utenti'
             user_names_response = requests.get(user_names_url)
             user_names_response.raise_for_status()
-            logging.info(f"Weather-data-fetcher --> user_names_response: {user_names_response}")
+            # logging.info(f"Weather-data-fetcher --> user_names_response: {user_names_response}")
 
             if user_names_response.status_code == 200:
                 user_names = user_names_response.json()
@@ -99,27 +103,27 @@ def main():
                     chat_id_response = requests.get(chat_id_url)
                     chat_id_response.raise_for_status()
                     chat_id = chat_id_response.json().get('decrypted_chat_id')
-                    logging.info(f"Weather-data-fetcher --> chat_id: {chat_id}")
+                    # logging.info(f"Weather-data-fetcher --> chat_id: {chat_id}")
                     
                     # Recupera le sottoscrizioni per ogni user_name
                     subscriptions_url = f'http://weather-event-notifier:5001/sottoscrizioni?user_name={user_name}'
                     subscriptions_response = requests.get(subscriptions_url)
                     subscriptions_response.raise_for_status()
-                    logging.info(f"Weather-data-fetcher --> subscriptions_response: {subscriptions_response.json()}")
+                    # logging.info(f"Weather-data-fetcher --> subscriptions_response: {subscriptions_response.json()}")
 
                     if subscriptions_response.status_code == 200:
                         subscriptions = subscriptions_response.json()
-                        print(f"Sottoscrizioni per {user_name}: {subscriptions}")
+                        # print(f"Sottoscrizioni per {user_name}: {subscriptions}")
 
                         # Processa le sottoscrizioni per l'utente corrente
                         for subscription_info in subscriptions:
                             city = subscription_info['citta']
                             weather_data = fetch_weather_data(city)
-                            logging.info(f"Weather-data-fetcher --> citta: {city}")
-                            logging.info(f"Weather-data-fetcher --> info-meteo: {weather_data}")
+                            # logging.info(f"Weather-data-fetcher --> citta: {city}")
+                            # logging.info(f"Weather-data-fetcher --> info-meteo: {weather_data}")
 
                             if check_conditions(subscription_info, weather_data):
-                                logging.info(f"Weather-data-fetcher --> condizioni soddisfatte nella citta {city} cercata dall'utente con chat_id {chat_id}. Weather_data: {weather_data}")
+                                logging.info(f"Weather-data-fetcher --> condizioni soddisfatte nella citta {city} cercata dall'utente {user_name}. Weather_data: {weather_data}")
                                 # Se le condizioni sono soddisfatte, invia una richiesta al Notification Server
                                 notification_data = {
                                     'user_id': chat_id,
@@ -136,6 +140,8 @@ def main():
                                 notification_url = 'http://notification-service:5000/notifiche'
                                 headers = {'Content-Type': 'application/json'}
                                 requests.post(notification_url, json=notification_data, headers=headers)
+                            else:
+                                logging.info(f"Weather-data-fetcher --> condizioni non soddisfatte nella citta {city} cercata dall'utente {user_name}.")
         except requests.exceptions.ConnectionError as e:
             print(f"Errore di connessione: {e}")
         except requests.exceptions.HTTPError as e:
@@ -144,7 +150,7 @@ def main():
             print(f"Errore sconosciuto: {e}")
 
         # Simula un intervallo di 1 minuto tra le verifiche meteorologiche
-        time.sleep(60)
+        time.sleep(20)
 
 if __name__ == '__main__':
     main()

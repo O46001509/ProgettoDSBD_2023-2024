@@ -1,13 +1,25 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 import psycopg2, time, os, json
 import logging
+from prometheus_flask_exporter import PrometheusMetrics
 
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)  # Imposta il livello di logging a INFO
 
 time.sleep(3)
 
 app = Flask(__name__)
+
+# Configura le metriche Prometheus
+metrics = PrometheusMetrics(app)
+
+# Definisci le tue metriche personalizzate qui
+
+# Endpoint /metrics per esporre le metriche a Prometheus
+@app.route('/metrics')
+def metrics():
+    from prometheus_client import generate_latest
+    return Response(generate_latest(), mimetype='text/plain')
 
 # Chiave segreta di 32 byte (256 bit)
 SECRET_KEY = 111111111  # Cambia la chiave segreta
@@ -35,10 +47,6 @@ def encrypt_chat_id(chat_id):
 def decrypt_chat_id(encrypted_chat_id):
     plain_text = encrypted_chat_id - SECRET_KEY
     return plain_text
-
-
-
-# -------------------------- Funzioni per la creazione delle tabelle --------------------------------
 
 @app.route('/crea_tabella_utenti', methods=['POST'])
 def create_users():
@@ -104,10 +112,6 @@ def create_sla_violations_table():
     except Exception as e:
         return jsonify({'error': f"Errore durante la creazione della tabella sla_violations: {e}"}), 500
 
-# ------------------------------------------------------------------------------------------------------
-
-
-# ----------------- Funzioni per la creazione di una sottoscrizione e una notifica ---------------------
 
 @app.route('/sottoscrizioni', methods=['GET','POST'])
 def manage_subscriptions():
@@ -158,11 +162,6 @@ def receive_notification():
 
     return jsonify({'message': 'Notifica inviata con successo!'}), 200
 
-# ---------------------------------------------------------------------------------------------------
-
-
-# ------------ Funzioni per la gestione dell'utente -------------------------------------------------
-
 @app.route('/aggiungi_utente', methods=['POST'])
 def add_user():
     data = request.get_json()
@@ -182,7 +181,7 @@ def get_user():
     logging.info(f"User name: {user_name}, chat_id: {chat_id}")
     encrypted_chat_id = encrypt_chat_id(int(chat_id))
     if user_name and chat_id:
-        # Recupero l'utente sia con user_name che con chat_id
+        # Recupera l'utente sia con user_name che con chat_id
         cur.execute("SELECT * FROM users WHERE user_name = %s AND chat_id = %s", (user_name, encrypted_chat_id))
         user = cur.fetchone()
         if user:
@@ -191,7 +190,7 @@ def get_user():
         else:
             #return jsonify({'message': 'Utente non trovato con lo stesso chat_id e nome_utente'}), 404
             if chat_id:
-                # Recupero l'utente solo con chat_id
+                # Recupera l'utente solo con chat_id
                 logging.info(f"if chat_id: {chat_id}")
 
                 cur.execute("SELECT * FROM users WHERE chat_id = %s", (encrypted_chat_id,))
@@ -315,16 +314,73 @@ def delete_subscription():
 
     except Exception as e:
         return jsonify({'error': f"Errore durante la cancellazione della sottoscrizione: {e}"}), 500
+    
+@app.route('/aggiorna_sottoscrizione', methods=['PUT'])
+def update_subscription():
+    data = request.get_json()
+    user_name = data.get('user_name')
+    citta = data.get('citta')
+    nuove_condizioni = data.get('nuove_condizioni')
+
+    if not user_name or not citta:
+        return jsonify({'error': 'Specificare user_name e citta come parametri nella richiesta'}), 400
+
+    try:
+        # Verifica l'esistenza della sottoscrizione
+        cur.execute("SELECT * FROM subscriptions WHERE user_name = %s AND citta = %s", (user_name, citta))
+        subscription = cur.fetchone()
+
+        if not subscription:
+            return jsonify({'error': 'Sottoscrizione non trovata'}), 404
+        
+        # Aggiorna la sottoscrizione con le nuove condizioni
+        cur.execute("UPDATE subscriptions SET condizioni = %s WHERE user_name = %s AND citta = %s",
+                    (json.dumps(nuove_condizioni), user_name, citta))
+        conn.commit()
+
+        return jsonify({'message': 'Sottoscrizione aggiornata con successo!'}), 200
+
+    except Exception as e:
+        conn.rollback()  # Annulla la transazione in caso di errore
+        logging.error(f"Errore durante l'aggiornamento della sottoscrizione: {e}")
+        return jsonify({'error': f"Errore durante l'aggiornamento della sottoscrizione: {e}"}), 500
 
 
-
-# --------------- Funzioni per la gestione delle metriche e delle violazioni sul DB ---------------------
+# @app.route('/add_sla_metric', methods=['POST'])
+# def add_sla_metric():
+#     data = request.get_json()
+#     metric_name = data['metric_name']
+#     threshold = data['threshold']
+#     description = data['description']
+    
+#     cur.execute("INSERT INTO sla_definitions (metric_name, threshold, description) VALUES (%s, %s, %s)",
+#                 (metric_name, threshold, description))
+#     conn.commit()
+    
+#     return jsonify({'message': 'SLA metric added successfully'}), 201
 
 @app.route('/get_sla_metrics', methods=['GET'])
 def get_sla_metrics():
-    cur.execute("SELECT * FROM sla_definitions")
-    sla_metrics = cur.fetchall()
-    return jsonify(sla_metrics), 200
+    try:
+        cur.execute("SELECT * FROM sla_definitions")
+        sla_metrics = cur.fetchall()
+        
+        # Converti i risultati in un formato più leggibile/maneggevole
+        sla_metrics_list = []
+        for metric in sla_metrics:
+            sla_metrics_list.append({
+                'sla_id': metric[0],
+                'metric_name': metric[1],
+                'threshold': metric[2],
+                'description': metric[3]
+            })
+        
+        logging.info(f"SLA_metrics: {sla_metrics_list}")
+        return jsonify(sla_metrics_list), 200
+    except Exception as e:
+        logging.error(f"Errore durante il recupero delle metriche SLA: {e}")
+        return jsonify({'error': f"Errore durante il recupero delle metriche SLA: {e}"}), 500
+
 
 @app.route('/update_sla_metric', methods=['PUT'])
 def update_sla_metric():
@@ -356,6 +412,7 @@ def record_sla_violation():
     sla_id = data['sla_id']
     violation_time = data['violation_time']
     actual_value = data['actual_value']
+    logging.info(f"Record: {actual_value}, {violation_time} ")
     
     cur.execute("INSERT INTO sla_violations (sla_id, violation_time, actual_value) VALUES (%s, %s, %s)",
                 (sla_id, violation_time, actual_value))
@@ -371,6 +428,7 @@ def get_sla_violations():
 
 @app.route('/add_sla_metric', methods=['POST'])
 def add_sla_metric():
+    # Ottenere i dati dalla richiesta
     data = request.get_json()
     metric_name = data.get('metric_name')
     threshold = data.get('threshold')
@@ -379,6 +437,7 @@ def add_sla_metric():
     # Verificare che tutti i campi necessari siano presenti
     if not all([metric_name, threshold, description]):
         return jsonify({'error': 'Mancano dati necessari per aggiungere una metrica SLA.'}), 400
+
     try:
         # Inserire i dati nella tabella sla_definitions
         cur.execute("""
@@ -388,9 +447,11 @@ def add_sla_metric():
         conn.commit()
         return jsonify({'message': 'Metrica SLA aggiunta con successo'}), 201
     except psycopg2.Error as e:
-        # Da gestire ancora gli errori del database, ad esempio violazioni della chiave univoca
+        # Gestire gli errori del database, ad esempio violazioni della chiave univoca
         conn.rollback()  # Annullare la transazione in caso di errore
         return jsonify({'error': f"Errore durante l'aggiunta della metrica SLA: {e}"}), 500
+
+# In database_service
 
 @app.route('/count_sla_violations', methods=['GET'])
 def count_sla_violations():
@@ -405,8 +466,6 @@ def count_sla_violations():
         return jsonify({'time_frame': time_frame, 'violations_count': count}), 200
     except Exception as e:
         return jsonify({'error': f"Errore durante la richiesta del conteggio delle violazioni SLA: {e}"}), 500
-    
-# ------------------------------------------------------------------------------------------------------------
 
 
 if __name__ == '__main__':

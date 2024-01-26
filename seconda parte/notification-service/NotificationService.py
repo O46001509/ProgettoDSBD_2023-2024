@@ -1,10 +1,21 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from telegram import Bot
 from telegram.constants import ParseMode
-import asyncio, os, psycopg2
-
+import asyncio, os
+from prometheus_flask_exporter import PrometheusMetrics
 
 app = Flask(__name__)
+
+# Configura le metriche Prometheus
+metrics = PrometheusMetrics(app)
+
+# Definisci le tue metriche personalizzate qui
+
+# Endpoint /metrics per esporre le metriche a Prometheus
+@app.route('/metrics')
+def metrics():
+    from prometheus_client import generate_latest
+    return Response(generate_latest(), mimetype='text/plain')
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN_FILE", "NO_VARIABLE_FOUND")
 
