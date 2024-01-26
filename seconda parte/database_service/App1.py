@@ -204,6 +204,29 @@ def get_user():
     else:
         return jsonify({'message': 'Parametri mancanti'}), 400
 
+@app.route('/verifica_utente', methods=['GET'])
+def verifica_utente():
+    user_name = request.args.get('user_name')
+
+    if not user_name:
+        return jsonify({'error': 'Specificare user_name come parametro nella richiesta'}), 400
+
+    try:
+        cur.execute("SELECT * FROM users WHERE user_name = %s", (user_name,))
+        user = cur.fetchone()
+
+        if user:
+            # Se l'utente esiste nel database con lo stesso user_name
+            return jsonify({'message': 'L\'utente esiste'}), 200
+        else:
+            # Se non esiste un utente con quel user_name
+            return jsonify({'error': 'L\'utente non esiste'}), 404
+
+    except Exception as e:
+        logging.error(f"Errore durante la verifica dell'utente: {e}")
+        return jsonify({'error': f"Errore durante la verifica dell'utente: {e}"}), 500
+
+
 @app.route('/aggiorna_utente', methods=['PUT'])
 def update_user():
     data = request.get_json()
@@ -321,7 +344,7 @@ def update_subscription():
     user_name = data.get('user_name')
     citta = data.get('citta')
     nuove_condizioni = data.get('nuove_condizioni')
-
+    
     if not user_name or not citta:
         return jsonify({'error': 'Specificare user_name e citta come parametri nella richiesta'}), 400
 

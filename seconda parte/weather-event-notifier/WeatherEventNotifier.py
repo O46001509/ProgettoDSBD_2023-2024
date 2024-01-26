@@ -160,7 +160,7 @@ def manage_subscriptions():
             user_name = data.get('user_name')
             citta = data.get('citta')
             # Assumi che "nuove_condizioni" sia il campo con le nuove informazioni per la sottoscrizione
-            nuove_condizioni = data.get('nuove_condizioni')
+            nuove_condizioni = data.get('condizioni')
 
             # Verifica se esiste già una sottoscrizione per l'utente e la città
             subscription_exists_url = f"{DATABASE_SERVICE_URL}/verifica_sottoscrizione"

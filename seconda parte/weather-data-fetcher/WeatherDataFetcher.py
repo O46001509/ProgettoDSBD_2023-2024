@@ -1,7 +1,8 @@
 import requests
 import time, os, logging
-import datetime as dt
 from openweather_wrapper import OpenWeatherWrapper
+
+DATABASE_SERVICE_URL = "http://database-service:5004"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,50 +28,60 @@ def return_weather(city):
     weather_wrapper = OpenWeatherWrapper(API_KEY)
     response = weather_wrapper.get_weather_data(city) 
 
-    # Conversione da kelvin a celsisus e fahrenheit
-    def kelvin_to_celsius_fahrenheit(kelvin):
-        celsius = kelvin - 273.15
-        fahrenheit = celsius * (9/5) + 32
-        return celsius, fahrenheit
+    if response:
 
 
-    temp_kelvin = response['main']['temp']
-    temp_celsius, temp_fahr = kelvin_to_celsius_fahrenheit(temp_kelvin)
+        # Conversione da kelvin a celsisus e fahrenheit
+        def kelvin_to_celsius_fahrenheit(kelvin):
+            celsius = kelvin - 273.15
+            fahrenheit = celsius * (9/5) + 32
+            return celsius, fahrenheit
 
-    feels_like_kelvin = response['main']['feels_like']
-    fl_celsius, fl_fahr = kelvin_to_celsius_fahrenheit(feels_like_kelvin)
 
-    wind_speed = response['wind']['speed']
-    #sunrise_time = dt.datetime.utcfromtimestamp(response['sys']['sunrise'] + response['timezone'])
-    #sunset_time = dt.datetime.utcfromtimestamp(response['sys']['sunset'] + response['timezone'])
+        temp_kelvin = response['main']['temp']
+        temp_celsius, temp_fahr = kelvin_to_celsius_fahrenheit(temp_kelvin)
 
-    humidity = response['main']['humidity']
-    description = response['weather'][0]['description']
+        feels_like_kelvin = response['main']['feels_like']
+        fl_celsius, fl_fahr = kelvin_to_celsius_fahrenheit(feels_like_kelvin)
 
-    info_meteo = [
-      city, temp_celsius, fl_celsius, wind_speed, humidity, description
-    ]
-    return info_meteo
+        wind_speed = response['wind']['speed']
+        #sunrise_time = dt.datetime.utcfromtimestamp(response['sys']['sunrise'] + response['timezone'])
+        #sunset_time = dt.datetime.utcfromtimestamp(response['sys']['sunset'] + response['timezone'])
 
+        humidity = response['main']['humidity']
+        description = response['weather'][0]['description']
+
+        info_meteo = [
+        city, temp_celsius, fl_celsius, wind_speed, humidity, description
+        ]
+        return info_meteo
+
+    else:
+        
+        info_meteo = None
+        return info_meteo
 
 def fetch_weather_data(city):
-    tmp = return_weather(city)[1]
-    fl_tmp = return_weather(city)[2]
-    wind_speed = return_weather(city)[3]
-    hum = return_weather(city)[4]
-    general = return_weather(city)[5]
-    # Restituisce dati meteorologici di esempio per la città specificata
-    return {
-        'citta': city,
-        'temperature': tmp,
-        'feel_temperature': fl_tmp,
-        'wind_speed': wind_speed,
-        'humidity' : hum,
-        'general_weather': general,
-        # 'rainfall': 5,      # Quantità di pioggia di esempio in mm
-        # 'snowfall': 0       # Quantità di neve di esempio in mm
-    }
-
+    info_meteo = return_weather(city)
+    if info_meteo:
+        tmp = info_meteo[1]
+        fl_tmp = info_meteo[2]
+        wind_speed = info_meteo[3]
+        hum = info_meteo[4]
+        general = info_meteo[5]
+        # Restituisce dati meteorologici di esempio per la città specificata
+        return {
+            'citta': city,
+            'temperature': tmp,
+            'feel_temperature': fl_tmp,
+            'wind_speed': wind_speed,
+            'humidity' : hum,
+            'general_weather': general,
+            # 'rainfall': 5,      # Quantità di pioggia di esempio in mm
+            # 'snowfall': 0       # Quantità di neve di esempio in mm
+        }
+    else:
+        return None
 # Verifica delle condizioni specificate nella sottoscrizione sono soddisfatte
 def check_conditions(subscription, weather_data):
     # logging.info(f"Weather-data-fetcher --> subscription inside check_conditions: {subscription}, weather_data: {weather_data}")
@@ -119,29 +130,45 @@ def main():
                         for subscription_info in subscriptions:
                             city = subscription_info['citta']
                             weather_data = fetch_weather_data(city)
+                            if weather_data:
+
                             # logging.info(f"Weather-data-fetcher --> citta: {city}")
                             # logging.info(f"Weather-data-fetcher --> info-meteo: {weather_data}")
 
-                            if check_conditions(subscription_info, weather_data):
-                                logging.info(f"Weather-data-fetcher --> condizioni soddisfatte nella citta {city} cercata dall'utente {user_name}. Weather_data: {weather_data}")
-                                # Se le condizioni sono soddisfatte, invia una richiesta al Notification Server
-                                notification_data = {
-                                    'user_id': chat_id,
-                                    'user_name': user_name,
-                                    'message': f"Condizioni meteorologiche soddisfatte a {city} - Temperatura: {weather_data['temperature']:.2f}°C,"
-                                               f"Temperatura percepita: {weather_data['feel_temperature']:.2f}°C,"
-                                               f"Umidita': {weather_data['humidity']}%,"
-                                               f"Meteo generale: {weather_data['general_weather']},"
-                                               f"Velocita' del vento: {(weather_data['wind_speed']*3.6):.2f}km/h\n"
-                                               f"{stampa_ora_attuale()}"
-                                }
+                                if check_conditions(subscription_info, weather_data):
+                                    logging.info(f"Weather-data-fetcher --> condizioni soddisfatte nella citta {city} cercata dall'utente {user_name}. Weather_data: {weather_data}")
+                                    # Se le condizioni sono soddisfatte, invia una richiesta al Notification Server
+                                    notification_data = {
+                                        'user_id': chat_id,
+                                        'user_name': user_name,
+                                        'message': f"Condizioni meteorologiche soddisfatte a {city} - Temperatura: {weather_data['temperature']:.2f}°C,"
+                                                f"Temperatura percepita: {weather_data['feel_temperature']:.2f}°C,"
+                                                f"Umidita': {weather_data['humidity']}%,"
+                                                f"Meteo generale: {weather_data['general_weather']},"
+                                                f"Velocita' del vento: {(weather_data['wind_speed']*3.6):.2f}km/h\n"
+                                                f"{stampa_ora_attuale()}"
+                                    }
 
-                                # Invia la richiesta al Notification Server
-                                notification_url = 'http://notification-service:5000/notifiche'
-                                headers = {'Content-Type': 'application/json'}
-                                requests.post(notification_url, json=notification_data, headers=headers)
+                                    # Invia la richiesta al Notification Server
+                                    notification_url = 'http://notification-service:5000/notifiche'
+                                    headers = {'Content-Type': 'application/json'}
+                                    requests.post(notification_url, json=notification_data, headers=headers)
+                                else:
+                                    logging.info(f"Weather-data-fetcher --> condizioni non soddisfatte nella citta {city} cercata dall'utente {user_name}.")
                             else:
-                                logging.info(f"Weather-data-fetcher --> condizioni non soddisfatte nella citta {city} cercata dall'utente {user_name}.")
+                                logging.error("Nome della città scritto in modo sbagliato.")
+                                subscription_exists_data = {
+                                    'user_name': user_name,
+                                    'citta': city
+                                }
+                                delete_subscription_url = f"{DATABASE_SERVICE_URL}/cancella_sottoscrizione"
+                                delete_subscription_response = requests.post(delete_subscription_url, json=subscription_exists_data)
+                                
+                                if delete_subscription_response.status_code == 200:
+                                    logging.error({'message': 'Sottoscrizione, scritta sbagliata, cancellata con successo!'}), 200
+                                else:
+                                    logging.error({'error': f"Errore durante la cancellazione della sottoscrizione, scritta sbagliata: {delete_subscription_response.text}"}), 500
+
         except requests.exceptions.ConnectionError as e:
             print(f"Errore di connessione: {e}")
         except requests.exceptions.HTTPError as e:
