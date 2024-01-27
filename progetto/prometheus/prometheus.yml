@@ -1,0 +1,40 @@
+global:
+  scrape_interval: 15s  # Intervallo di scraping globale
+
+scrape_configs:
+  - job_name: 'weather-event-notifier'
+    static_configs:
+      - targets: ['weather-event-notifier:5001']  
+  
+  - job_name: 'sla-manager'
+    static_configs: 
+      - targets: ['sla-manager:5005']
+
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['notification-service:5000']  
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['prometheus:9090'] 
+
+  - job_name: 'database-service'
+    static_configs:
+      - targets: ['database-service:5004']
+
+  # Configurazione per il node_exporter del sistema
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    metric_relabel_configs:
+    - source_labels: [__name__]
+      regex: 'go_.*'
+      action: drop  # Elimino tutte le metriche che iniziano con 'go_'
+
+  # Configurazione per cAdvisor
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080'] 
+
+rule_files:
+  - "rule.yml"

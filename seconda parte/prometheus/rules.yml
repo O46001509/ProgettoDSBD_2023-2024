@@ -1,6 +1,0 @@
-groups:
-  - name: cpu_usage
-    rules:
-    - record: job:cpu_usage:avg_over_time_5m
-      expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
-    # Aggiungi altre regole qui

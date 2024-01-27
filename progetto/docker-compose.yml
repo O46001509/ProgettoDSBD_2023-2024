@@ -1,0 +1,159 @@
+version: '3'
+
+services:
+  postgres:
+      image: postgres:16.1 
+      container_name: postgres
+      ports:
+        - 5432:5432
+      environment:
+        - POSTGRES_HOST=${POSTGRES_HOST}
+        - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+        - POSTGRES_DATABASE=${POSTGRES_DATABASE}
+        - POSTGRES_USER=${POSTGRES_USER}
+        
+      volumes:
+        - ./postgres-data:/var/lib/postgresql/data
+      networks:
+        - weather-net
+
+  database-service:
+    build: ./database_service
+    environment:
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE}
+      - SECRET_KEY=${SECRET_KEY}
+    ports: 
+      - "5004:5004"
+    depends_on:
+      - postgres
+    networks:
+      - weather-net
+    restart: on-failure
+
+  sla-manager:
+    build:
+      context: ./sla-manager
+    ports:
+      - "5005:5005"
+    networks:
+      - weather-net
+    depends_on:
+      - database-service
+    restart: on-failure
+  
+
+  weather-event-notifier:
+    build:
+      context: ./weather-event-notifier
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+    networks:
+      - weather-net
+    depends_on:
+      - postgres
+    restart: on-failure
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    environment:
+      - TELEGRAM_TOKEN_FILE=${TELEGRAM_TOKEN_FILE}
+    ports:
+      - "5000:5000"
+    networks:
+      - weather-net
+    depends_on:
+      - postgres
+    restart: on-failure
+
+  weather-data-fetcher:
+    build:
+      context: ./weather-data-fetcher
+      dockerfile: Dockerfile
+    environment:
+      - OPENWEATHERMAP_API_KEY_FILE=${OPENWEATHERMAP_API_KEY_FILE}
+    networks:
+      - weather-net
+    depends_on:
+      - postgres
+      - weather-event-notifier
+    restart: on-failure
+  
+  handle-users:
+    build:
+      context: ./handle-users
+      dockerfile: Dockerfile
+    environment:
+      - TELEGRAM_TOKEN_FILE=${TELEGRAM_TOKEN_FILE}
+    networks:
+      - weather-net
+    depends_on:
+      - postgres
+      - weather-event-notifier
+    restart: on-failure
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9091:9090"
+    networks:
+      - weather-net
+    restart: on-failure
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - '3001:3000'
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+    links:
+      - prometheus
+
+  node-exporter:
+    image: prom/node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - "/proc:/host/proc:ro"
+      - "/sys:/host/sys:ro"
+      - "/:/rootfs:ro"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points'
+      - '^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - weather-net
+    restart: unless-stopped
+
+  cadvisor:
+    image: google/cadvisor
+    ports:
+      - "8081:8080"
+    volumes:
+      - "/:/rootfs:ro"
+      - "/var/run:/var/run:rw"
+      - "/sys:/sys:ro"
+      - "/var/lib/docker/:/var/lib/docker:ro"
+    networks:
+      - weather-net
+    restart: unless-stopped
+
+      
+networks:
+  weather-net:
+
+
+
+
+
