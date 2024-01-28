@@ -5,14 +5,21 @@ Progetto Elaborato del corso di DISTRIBUTED SYSTEMS AND BIG DATA.
 ## Tabella dei Contenuti
 
 - [Descrizione](#descrizione)
+- [Architettura del Sistema](#ArchitetturaSistema)
+    - [DiagrammaArchitetturale](#diagrammaarchitetturale)
+    - [InterazioniSistema](#interazionisistema)
 - [Installazione](#installazione)
 - [Utilizzo](#utilizzo)
 - [Autori](#autori)
 
 ## Descrizione
 
-Il progetto è suddiviso in: prima-parte e seconda-parte.
+Il progetto prevede l'implementazione di un'applicazione distribuita tramite Docker-Compose che consente agli utenti, una volta registrati tramite il bot di telegram "giosa-weather-alerts", di inserire delle sottoscrizioni per poter ricevere le notifiche sulle informazioni meteo delle città interessate e secondo le condizioni scelte. Abbiamo cercato quindi di seguire l'Applicazione1, descritta nei requisiti dell'elaborato, personalizzandola secondo ciò che abbiamo scelto di implementare.\n
+Nella cartella Documentazione è presente un pdf con la spiegazione del progetto, dei servizi e dei concetti chiave impiegati, oltre ad esserci già in questo file Readmi una breve descrizione e tutte le informazioni richieste per la consegna dell'elaborato stesso.
 
+## DiagrammaArchitetturale
+
+Nella figura sottostante viene mostrato il diagramma di flusso del sistema.
 ```mermaid
 graph TB
     subgraph services
@@ -61,6 +68,81 @@ graph TB
     style user1 fill:#0f0,stroke-width:2px,stroke-dasharray:0
     style I fill:#f09,stroke-width:0px
     style O fill:#f09,stroke-width:0px
+```
+
+## InterazioniSistema
+
+### Diagramma 1: Registrazione Utente
+```mermaid
+sequenceDiagram
+    participant U as Utente
+    participant I as TelegramBot
+    participant L as HandleUsersService
+    participant B as DatabaseService
+
+    U ->> I: Interazione con il bot di Telegram
+    I ->> L: Richiesta di registrazione
+    L ->> B: Aggiunta nuovo utente al database
+    B -->> L: Conferma registrazione
+    L -->> I: Conferma registrazione avvenuta
+    I -->> U: Conferma registrazione avvenuta
+```
+
+### Diagramma 2: Nuova Sottoscrizione ad un Evento Meteo
+
+```mermaid
+sequenceDiagram
+    participant U as Utente
+    participant C as WeatherEventNotifierService
+    participant B as DatabaseService
+
+    U ->> C: Richiesta di nuova sottoscrizione (POST da terminale)
+    C ->> B: Verifica utente nel database
+    B -->> C: Risposta (utente presente)
+    C ->> B: Salva nuova sottoscrizione nel database
+    B -->> C: Conferma salvataggio
+    C ->> U: Sottoscrizione avvenuta con successo 
+```
+
+### Diagramma 3: Aggiornamento Dati Meteorologici
+
+```mermaid
+sequenceDiagram
+    participant C as WeatherDataFetcherService
+    participant N as WeatherEventNotifierService
+    participant B as DatabaseService
+    participant D as NotificationService
+    participant O as OpenWeatherMap
+    participant I as TelegramBot 
+
+    C ->> N: Richiesta di informazioni utente
+    N ->> B: Verifica utente nel database
+    B -->> N: Risposta (utente presente)
+    N -->> C: Risposta con informazioni utente
+    C ->> N: Richiesta di sottoscrizioni utente
+    N -->> C: Risposta con elenco sottoscrizioni
+    loop Per ogni sottoscrizione
+        C ->> O: Richiesta informazioni meteo
+        O -->> C: Risposta con dati meteorologici
+        C ->> D: Richiesta di invio notifiche
+        D ->> I: Invia notifica all'utente (tramite bot Telegram)
+        I ->> D: Conferma utente notificato
+        D ->> C: Conferma notifica effettuata
+    end
+```
+
+### Diagramma 4: Aggiunta nuova metrica
+
+```mermaid
+sequenceDiagram
+    participant U as Utente
+    participant S as SLAManagerService
+    participant B as DatabaseService
+
+    U ->> S: Richiesta di inserimento nuova metrica
+    S ->> B: Richiesta di salvataggio metrica nel database
+    B -->> S: Salvataggio completato
+    S -->> U: Nuova metrica inserita con successo
 ```
 
 ## Installazione
