@@ -5,23 +5,25 @@ Progetto Elaborato del corso di DISTRIBUTED SYSTEMS AND BIG DATA.
 ## Tabella dei Contenuti
 
 - [Descrizione](#descrizione)
-- [Architettura del Sistema](#ArchitetturaSistema)
-    - [DiagrammaArchitetturale](#diagrammaarchitetturale)
-    - [InterazioniSistema](#interazionisistema)
-- [Installazione](#installazione)
+- [Architettura del Sistema](#architettura-del-sistema)
+    - [Diagramma Architetturale](#diagramma-architetturale)
+    - [Interazioni Sistema](#interazioni-sistema)
+- [Installazione e Configurazione](#installazione-e-configurazione)
 - [Utilizzo](#utilizzo)
-- [RelazioneProgetto](#relazioneprogetto)
+- [Relazione Progetto](#relazione-progetto)
     - [Abstrat](#abstract)
-    - [ScelteProgettuali](scelteprogettuali)
-    - [API_implementate](#API_implementate) 
+    - [Scelte-Progettuali](#scelte-progettuali)
+    - [API implementate](#api-implementate) 
 - [Autori](#autori)
+
 
 ## Descrizione
 
 Il progetto prevede l'implementazione di un'applicazione distribuita tramite Docker-Compose che consente agli utenti, una volta registrati tramite il bot di telegram "giosa-weather-alerts", di inserire delle sottoscrizioni per poter ricevere le notifiche sulle informazioni meteo delle città interessate e secondo le condizioni scelte. Abbiamo cercato quindi di seguire l'Applicazione1, descritta nei requisiti dell'elaborato, personalizzandola secondo ciò che abbiamo scelto di implementare.\n
 Nella cartella Documentazione è presente un pdf con la spiegazione del progetto, dei servizi e dei concetti chiave impiegati, oltre ad esserci già in questo file Readmi una breve descrizione e tutte le informazioni richieste per la consegna dell'elaborato stesso, come l'abstract e le scelete progettuali.
 
-## DiagrammaArchitetturale
+## Architettura del Sistema
+## Diagramma Architetturale
 
 Nella figura sottostante viene mostrato il diagramma di flusso del sistema.
 ```mermaid
@@ -74,7 +76,7 @@ graph TB
     style O fill:#f09,stroke-width:0px
 ```
 
-## InterazioniSistema
+## Interazioni Sistema
 
 ### Diagramma 1: Registrazione Utente
 ```mermaid
@@ -149,7 +151,7 @@ sequenceDiagram
     S -->> U: Nuova metrica inserita con successo
 ```
 
-## Installazione
+## Installazione e Configurazione
 
 Passaggi necessari per l'installazione e la configurazione del progetto.
 
@@ -227,7 +229,59 @@ L'applicazione sarà ora accessibile agli indirizzi specificati nelle configuraz
 
 ## Utilizzo
 
-...
+### 1. Avvio del Progetto:
+
+Assicurati che Docker sia installato nel tuo sistema e di dover svolgere i controlli come indicati nella sezione precedente [Installazione e Configurazione](#installazione-e-configurazione).
+Esegui il comando docker-compose up -d --build dalla directory principale del progetto per avviare l'applicazione e i relativi servizi in modalità detached.
+
+### 2. Interazione con il Bot Telegram "giosa-weather-alerts":
+
+Accedi al bot di Telegram "giosa-weather-alerts" e avvia il comando /start per iniziare la sottoscrizione alle notifiche meteorologiche.
+
+### 3. Creazione di una Sottoscrizione:
+
+Da un terminale, esegui il comando PowerShell per creare una sottoscrizione specificando i parametri desiderati come nome utente, città e condizioni meteorologiche.
+```bash
+$url = "http://localhost:5001/sottoscrizioni"
+$headers = @{"Content-Type" = "application/json"}
+
+$body = @{
+    "user_name" = "Sasha"
+    "citta" = "Barcellona"
+    "condizioni" = @{
+        "temperatura_massima" = 40
+        "temperatura_minima" = -34
+        "vento_max" = 99
+        "umidita_max" = 99
+    }
+} | ConvertTo-Json
+
+Invoke-WebRequest -Uri $url -Method Post -Headers $headers -Body $body
+```
+
+Verifica se ricevi le notifiche con le informazioni meteorologiche nella chat col bot quando le condizioni scelte sono soddisfatte.
+
+### 4. Inserimento di una Metrica SLA:
+
+Sempre da terminale, esegui il comando PowerShell per inserire una metrica SLA specificando il nome della metrica, la soglia e una breve descrizione.
+```bash
+$url = "http://localhost:5005/sla"
+$headers = @{"Content-Type" = "application/json"}
+
+$body = @{
+    'metric_name' = 'active_subscriptions'
+    'threshold' = 7
+    'description' = 'Numero massimo di richieste di dati meteorologici ammesse per evitare il sovraccarico del servizio'
+} | ConvertTo-Json
+
+Invoke-WebRequest -Uri $url -Method Post -Headers $headers -Body $body
+```
+
+Verifica su Grafana o Prometheus se arrivano degli alert in caso di violazione della metrica SLA.
+
+### 5. Notifiche per Violazioni SLA:
+
+Monitora la chat col bot per eventuali notifiche che indicano la violazione della metrica SLA e le azioni correttive che il sistema sta adottando o suggerisce all'utente.
 
 ## Relazione progetto
 
@@ -235,15 +289,68 @@ Di seguito, si hanno le parti della relazione del progetto; che sono incluse anc
 
 ## Abstract
 
-...
+Il progetto **ProgettoDSBD_2023-2024** è stato sviluppato come parte del corso di "DISTRIBUTED SYSTEMS AND BIG DATA". L'obiettivo principale è la creazione di un sistema distribuito basato su un'architettura a microservizi, progettato per gestire alcune interazioni utente tramite un bot Telegram e fornire notifiche meteorologiche personalizzate, in funzione del fatto se si verificano le condizioni stabilite durante l'inserimento della sottoscrizione.
+
+L'architettura modulare del sistema permette la scalabilità e la gestione efficace di funzionalità specifiche attraverso servizi dedicati, come il database-service per la memorizzazione dei dati degli utenti e le interazioni con PostgreSQL, il notification-service per l'invio di notifiche, l'handle-users-service per l'interazione con il bot Telegram, durante la fase di registrazione, il data-fetcher per la verifica delle condizioni e l'event-notiier per la gestione delle nuove sottoscrizioni.
+
+Inoltre, il sistema implementa il monitoraggio attraverso Prometheus e Grafana, garantendo la visibilità delle metriche chiave del sistema. L'integrazione con OpenWeatherMap consente di fornire informazioni meteorologiche aggiornate.
+
+Le scelte progettuali mirano a garantire una struttura robusta e flessibile, consentendo il facile adattamento del sistema a futuri sviluppi e requisiti.
 
 ## Scelte progettuali
 
-...
+Durante lo sviluppo del progetto, sono state prese diverse decisioni di progettazione per garantire un'architettura efficace e un funzionamento ottimale. Di seguito sono elencate alcune delle principali scelte progettuali:
+
+### 1. Architettura a Microservizi: 
+La decisione di adottare un'architettura a microservizi è stata motivata dalla necessità di separare le responsabilità e facilitare la scalabilità. Ogni microservizio è progettato per gestire specifiche funzionalità, consentendo una gestione modulare e indipendente.
+
+### 2. Utilizzo di Docker: 
+L'utilizzo di container Docker è stato scelto per garantire la portabilità dell'applicazione e semplificare il processo di distribuzione. Docker facilita la creazione, l'esecuzione e la distribuzione dei microservizi in ambienti diversi, garantendo coerenza e facilità di gestione.
+
+### 3. Database-Service per PostgreSQL: 
+La decisione di introdurre un "database-service" dedicato è stata presa per gestire le interazioni con PostgreSQL in modo centralizzato. Questo approccio semplifica la gestione del database, garantendo al contempo una maggiore coerenza nei dati e facilitando eventuali operazioni di scalabilità o migrazione del database.
+
+### 4. Monitoraggio con Prometheus e Grafana: 
+L'integrazione di Prometheus e Grafana è stata una scelta strategica per garantire il monitoraggio delle prestazioni e delle metriche chiave del sistema. Questi strumenti forniscono una visibilità approfondita sulle attività dei microservizi, facilitando la risoluzione dei problemi e l'ottimizzazione delle prestazioni.
+
+### 5. Comunicazione tramite API RESTful: 
+Tutte le interazioni tra i microservizi sono gestite tramite API RESTful. Questa scelta favorisce la decentralizzazione e la comunicazione efficiente, consentendo una facile integrazione e scalabilità del sistema.
+
+### 6. Strumenti di Notifica tramite Telegram: 
+L'integrazione di un bot Telegram per le notifiche offre un canale di comunicazione efficace e immediato con gli utenti, migliorando l'esperienza complessiva dell'applicazione.
+
+### 7. Gestione Asincrona con asyncio nel Notification Service: 
+Per ottimizzare l'efficienza del notification-service, è stata adottata l'utilizzo di asyncio per gestire le operazioni di invio delle notifiche in modo asincrono. Questo approccio consente al servizio di gestire un numero maggiore di richieste contemporaneamente, migliorando la reattività complessiva dell'applicazione.
+
+### 8. Utilizzo di APSScheduler nel SLA Manager: 
+Per garantire la tempestiva esecuzione delle attività di gestione degli SLA, il servizio SLAManager fa uso del modulo APSScheduler. Questo scheduler offre un meccanismo efficiente per pianificare e eseguire operazioni periodiche, consentendo al servizio di monitorare e rispettare gli accordi di livello di servizio in modo accurato.
 
 ## API implementate
 
-...
+Il sistema ProgettoDSBD_2023-2024 implementa diverse API per gestire interazioni utente e servizi specifici. Di seguito sono elencate le principali API:
+
+1. **Bot Telegram (/start):**
+   - Descrizione: Inizializza la registrazione dell'utente attraverso il bot Telegram.
+   - Metodo: Command (/start).
+   - Endpoint: N/D.
+
+2. **Weather-event-notifier (/subscriptions):**
+   - Descrizione: Consente agli utenti di interagire con il sistema, principalmente attraverso il terminale, per gestire le sottoscrizioni relative agli eventi meteorologici.
+   - Metodo: GET, POST, PUT, DELETE.
+   - Endpoint: `/subscriptions`.
+   - **Parametri Richiesti:** POST
+       - `user_name` (string): L'user_name dell'utente.
+       - `citta` (string): La città per cui ottenere le info-meteo.
+       - `condizioni` (map): Sono le 4 condizioni che può scegliere l'utente e in base ad esse, se si verificano o meno, riceverà le notifiche o meno.
+
+3. **Sla-Manager (/sla):**
+   - Descrizione: Consente di interagire con il sistema, principalmente attraverso il terminale, per gestire le metriche da far rispettare.
+   - Metodo: GET, POST, PUT, DELETE.
+   - Endpoint: `/sla`.
+   - **Parametri Richiesti:** POST
+       - `metric_name` (string): Nome della metrica.
+       - `threshold` (int): Il valore soglia che rappresenta il limite massimo accettabile per la metrica SLA.
+       - `Description` (string): descrizione della metrica.
 
 ## Autori
 
