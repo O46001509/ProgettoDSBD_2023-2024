@@ -1,0 +1,11 @@
+groups:
+- name: sla_alerts
+  rules:
+  - alert: SLAViolation
+    expr: increase(sla_violations_total[1m]) > 0
+    for: 30s
+    labels:
+      severity: critical
+    annotations:
+      summary: "SLA Violation Detected"
+      description: "An SLA violation has been detected."

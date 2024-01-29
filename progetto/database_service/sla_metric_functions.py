@@ -50,7 +50,7 @@ def cancella_metrica(conn, cur):
     
     return jsonify({'message': 'SLA metric deleted successfully'}), 200
 
-def aggiunta_metrica(cur, conn):
+def aggiunta_metrica(conn, cur):
     data = request.get_json()
     metric_name = data.get('metric_name')
     threshold = data.get('threshold')

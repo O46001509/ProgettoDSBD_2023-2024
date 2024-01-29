@@ -4,7 +4,7 @@ import os, time
 import logging
 from datetime import datetime
 from prometheus_flask_exporter import PrometheusMetrics
-from prometheus_client import generate_latest
+from prometheus_client import generate_latest, Counter
 from apscheduler.schedulers.background import BackgroundScheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -112,6 +112,21 @@ def sla_probability():
     # non siamo arrivati a implementare questa parte
     print(metric_name)
 
+def add_notification_interval_sla_definition():
+    notification_interval_sla = {
+        'metric_name': 'notification_interval_seconds',  # Nome della metrica che hai definito nel weather-data-fetcher
+        'threshold': 10,  # Soglia percentuale oltre la quale si considera una violazione
+        'description': "La differenza tra l\'intervallo effettivo delle notifiche e l\'intervallo previsto non deve superare il 10%"
+    }
+    try:
+        response = requests.post(f"{DATABASE_SERVICE_URL}/add_sla_metric", json=notification_interval_sla)
+        response.raise_for_status()
+        logging.info("Definizione di SLA per l'intervallo delle notifiche aggiunta con successo")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Errore durante l'aggiunta della definizione di SLA per l'intervallo delle notifiche: {e}")
+
+add_notification_interval_sla_definition()
+
 def fetch_metric_value(metric_name):
     try:
         prometheus_query_url = f"{PROMETHEUS_URL}/api/v1/query"
@@ -148,29 +163,51 @@ def check_cpu_usage():
     except Exception as e:
         logging.error(f"Errore durante il controllo dell'utilizzo della CPU: {e}")
 
+sla_violations_counter = Counter('sla_violations', 'Number of SLA violations')
+
 def evaluate_sla():
     try:
         sla_metrics = requests.get(f"{DATABASE_SERVICE_URL}/get_sla_metrics").json()
         for metric in sla_metrics:
             metric_name = metric['metric_name']
             actual_value = fetch_metric_value(metric_name)
+            threshold_percentage = metric.get('threshold', 0)  # Ottieni la soglia percentuale se definita
             
-            if actual_value is not None and float(actual_value) > float(metric['threshold']):
-                # Registra la violazione
-                violation_data = {
-                    'sla_id': metric['sla_id'],
-                    'violation_time': datetime.utcnow().isoformat(),  # Converto datetime in una stringa ISO
-                    'actual_value': actual_value
-                }
-                requests.post(f"{DATABASE_SERVICE_URL}/record_sla_violation", json=violation_data)
-                logging.info(f"Violazione SLA registrata: {metric_name} con valore {actual_value}")
+            # Controllo aggiuntivo per la metrica dell'intervallo delle notifiche
+            if metric_name == 'notification_interval_seconds' and actual_value is not None:
+                # Calcola l'intervallo previsto dal file
+                with open('intervallo.txt', 'r') as file:
+                    intervallo_previsto = int(file.read())
+                intervallo_effettivo = float(actual_value)
+                logging.info(f"Intervallo effettivo -->{intervallo_effettivo}")
+                # Calcola la soglia assoluta (10% dell'intervallo previsto)
+                threshold = intervallo_previsto * (1 + float(threshold_percentage) / 100.0)
+                logging.info(f"teshold: {threshold}")
+                # Controlla se l'intervallo effettivo supera la soglia
+                if intervallo_effettivo > float(threshold):
+                    logging.info("Violazione verificata")
+                    # Incrementa il contatore di violazioni SLA
+                    sla_violations_counter.inc()
+                    # Resto del codice per gestire la violazione...
+
+
+                    # Registra la violazione
+                    violation_data = {
+                        'sla_id': metric['sla_id'],
+                        'violation_time': datetime.utcnow().isoformat(),  # Converto datetime in una stringa ISO
+                        'actual_value': actual_value
+                    }
+                    requests.post(f"{DATABASE_SERVICE_URL}/record_sla_violation", json=violation_data)
+                    logging.info(f"Violazione SLA: l'intervallo effettivo delle notifiche supera del {threshold_percentage}% l'intervallo previsto.")
     except Exception as e:
         logging.error(f"Errore durante la valutazione delle SLA: {e}")
 
 
 # Schedulazione della valutazione SLA ad intervalli regolari
 def schedule_sla_evaluation():
-    scheduler.add_job(evaluate_sla, 'interval', minutes=1)  # Esegue ogni minuto
+    with open('intervallo.txt', 'r') as file:
+        intervallo_previsto = int(file.read())
+    scheduler.add_job(evaluate_sla, 'interval', seconds=30)  # Esegue ogni minuto
     scheduler.add_job(check_cpu_usage, 'interval', minutes=1)  # Esegue ogni minuto
     scheduler.start()
 
@@ -192,6 +229,9 @@ def get_sla_status():
     except Exception as e:
         return jsonify({'error': f"Errore durante la richiesta dello stato SLA: {e}"}), 500
 
+
+
+
 @app.route('/sla/violations/count', methods=['GET'])
 def get_violations_count():
     time_frame = request.args.get('time_frame', default='1h')  # Può essere '1h', '3h', '6h'
@@ -199,6 +239,11 @@ def get_violations_count():
         # Chiamata all'endpoint del database_service per ottenere il conteggio delle violazioni
         response = requests.get(f"{DATABASE_SERVICE_URL}/count_sla_violations", params={'time_frame': time_frame})
         response.raise_for_status()
+        violations_count = response.json()['count']  # Assumendo che la risposta includa un campo 'count'
+        
+        # Aggiornare il contatore Prometheus
+        #sla_violations_counter.inc(violations_count)
+        
         return jsonify(response.json()), response.status_code
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f"Errore durante la richiesta del conteggio delle violazioni SLA: {e}"}), 500

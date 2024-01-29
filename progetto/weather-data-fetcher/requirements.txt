@@ -1,2 +1,5 @@
 requests
 psycopg2
+prometheus_client
+prometheus_flask_exporter
+apscheduler

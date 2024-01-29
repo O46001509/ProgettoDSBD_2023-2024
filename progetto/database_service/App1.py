@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request, Response
 import psycopg2, time, os, logging
 from prometheus_flask_exporter import PrometheusMetrics
 from prometheus_client import generate_latest
-from database_service.create_table_functions import *
+from create_table_functions import *
 from subsriptions_funcions import *
 from users_functions import *
 from sla_metric_functions import *
@@ -37,19 +37,19 @@ cur = conn.cursor()
 
 @app.route('/crea_tabella_utenti', methods=['POST'])
 def create_users():
-    create_users_table(conn, cur)
+    return create_users_table(conn, cur)
 
 @app.route('/crea_tabella_sottoscrizioni', methods=['POST'])
 def create_subscriptions():
-    create_subscriptions_table(conn, cur)
+    return create_subscriptions_table(conn, cur)
     
 @app.route('/crea_tabella_sla_definitions', methods=['POST'])
 def create_sla_definitions():
-    create_subscriptions_table(conn, cur)
+    return create_sla_definitions_table(conn, cur)
 
 @app.route('/crea_tabella_sla_violations', methods=['POST'])
 def create_sla_violations():
-    create_sla_violations_table(conn, cur)
+    return create_sla_violations_table(conn, cur)
 
 
 # ------------------ Gestione SOTTOSCRIZIONI DB ------------------------------------
@@ -57,21 +57,21 @@ def create_sla_violations():
 @app.route('/sottoscrizioni', methods=['GET','POST','PUT'])
 def manage_subscriptions():
     if request.method == 'GET':
-        request_get_sottoscrizioni(cur)
+        return request_get_sottoscrizioni(cur)
     elif request.method == 'POST':
-        request_post_sottoscrizioni(conn, cur)
+        return request_post_sottoscrizioni(conn, cur)
     elif request.method == 'PUT':
-        request_put_sottoscrizioni(conn, cur)
+        return request_put_sottoscrizioni(conn, cur)
 
 # Endpoint per verificare l'esistenza di una sottoscrizione
 @app.route('/verifica_sottoscrizione', methods=['POST'])
 def verify_subscription():
-    verifica_sottoscrizione(cur)
+    return verifica_sottoscrizione(cur)
 
 # Endpoint per cancellare una sottoscrizione
 @app.route('/cancella_sottoscrizione', methods=['POST'])
 def delete_subscription():
-    cancella_sottoscrizione(conn, cur)
+    return cancella_sottoscrizione(conn, cur)
 
 @app.route('/notifiche', methods=['POST'])
 def receive_notification():
@@ -93,31 +93,31 @@ def receive_notification():
 
 @app.route('/aggiungi_utente', methods=['POST'])
 def add_user():
-    aggiungi_utente(conn, cur)
+    return aggiungi_utente(conn, cur)
 
 @app.route('/recupera_utente', methods=['GET'])
 def get_user():
-    recupera_utente(cur)
+    return recupera_utente(cur)
     
 @app.route('/recupera_intervallo', methods=['GET'])
 def get_interval():
-    recupero_intervallo(cur)
+    return recupero_intervallo(cur)
 
 @app.route('/verifica_utente', methods=['GET'])
 def verifica_utente():
-    verifica_utente_(cur)
+    return verifica_utente_(cur)
 
 @app.route('/aggiorna_utente', methods=['PUT'])
 def update_user():
-    aggiorna_utente(conn, cur)
+    return aggiorna_utente(conn, cur)
     
 @app.route('/aggiorna_intervallo', methods=['PUT'])
 def update_user_interval():
-    aggiorna_intervallo(conn, cur)
+    return aggiorna_intervallo(conn, cur)
     
 @app.route('/utenti_user_name', methods=['GET'])
 def get_all_user_names():
-    get_user_names(cur)
+    return get_user_names(cur)
     
 @app.route('/utenti', methods=['GET'])
 def get_subscriptions_by_user_name():
@@ -145,30 +145,30 @@ def get_subscriptions_by_user_name():
     
 @app.route('/chat_id', methods=['GET'])
 def get_chat_id_by_user_name():
-    get_chat_id(cur)
+    return get_chat_id(cur)
 
 
 # ----------------------- Gestione SLA-METRICS & VIOLATIONS DB ---------------------------------------
 
 @app.route('/get_sla_metrics', methods=['GET'])
 def get_sla_metrics():
-    request_get_sla_metrics(cur)
+    return request_get_sla_metrics(cur)
 
 @app.route('/add_sla_metric', methods=['POST'])
 def add_sla_metric():
-    aggiunta_metrica(conn, cur)
+    return aggiunta_metrica(conn, cur)
 
 @app.route('/update_sla_metric', methods=['PUT'])
 def update_sla_metric():
-    aggiorna_metrica(conn, cur)
+    return aggiorna_metrica(conn, cur)
 
 @app.route('/delete_sla_metric', methods=['DELETE'])
 def delete_sla_metric():
-    cancella_metrica(conn, cur)
+    return cancella_metrica(conn, cur)
 
 @app.route('/record_sla_violation', methods=['POST'])
 def record_sla_violation():
-    aggiunta_violazione(conn, cur)
+    return aggiunta_violazione(conn, cur)
 
 @app.route('/get_sla_violations', methods=['GET'])
 def get_sla_violations():
@@ -178,7 +178,7 @@ def get_sla_violations():
 
 @app.route('/count_sla_violations', methods=['GET'])
 def count_sla_violations():
-    conta_violazioni(cur)
+    return conta_violazioni(cur)
 
 
 if __name__ == '__main__':

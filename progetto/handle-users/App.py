@@ -72,7 +72,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             else:
                 logging.error(f"Errore nella richiesta /verifica_utente. Codice di stato: {check_user_response.status_code}, Contenuto: {check_user_response.text}")
-                await context.bot.send_message(chat_id=update.effective_chat.id, text="Si è verificato un errore nel controllo del user_name. Riprova.")
+                await context.bot.send_message(chat_id=update.effective_chat.id, text="An error occurred in cheking the user_name. Try again with /start.")
                 del user_states[user_id]
                 return
 

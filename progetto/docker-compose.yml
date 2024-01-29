@@ -36,6 +36,8 @@ services:
   sla-manager:
     build:
       context: ./sla-manager
+    volumes:
+      - ./weather-data-fetcher/intervallo.txt:/app/intervallo.txt 
     ports:
       - "5005:5005"
     networks:
@@ -75,8 +77,12 @@ services:
     build:
       context: ./weather-data-fetcher
       dockerfile: Dockerfile
+    volumes: 
+      - ./weather-data-fetcher/intervallo.txt:/app/intervallo.txt 
     environment:
       - OPENWEATHERMAP_API_KEY_FILE=${OPENWEATHERMAP_API_KEY_FILE}
+    ports:
+      - "5006:5006"
     networks:
       - weather-net
     depends_on:
@@ -102,6 +108,7 @@ services:
     container_name: prometheus
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/rules_sla_violation.yml:/etc/prometheus/rules_sla_violation.yml
     ports:
       - "9091:9090"
     networks:
@@ -110,6 +117,9 @@ services:
 
   grafana:
     image: grafana/grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+
     ports:
       - '3001:3000'
     environment:
@@ -118,6 +128,8 @@ services:
       - GF_SECURITY_ALLOW_EMBEDDING=true
     links:
       - prometheus
+
+   
 
   node-exporter:
     image: prom/node-exporter
@@ -148,8 +160,21 @@ services:
     networks:
       - weather-net
     restart: unless-stopped
+  
+  alertmanager:
+    image: prom/alertmanager
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    ports:
+      - "9093:9093"
+    networks:
+      - weather-net
+    restart: on-failure
 
-      
+
+volumes:
+  grafana_data:
+
 networks:
   weather-net:
 

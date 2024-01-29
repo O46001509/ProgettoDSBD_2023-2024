@@ -4,7 +4,7 @@ import requests
 import logging
 from prometheus_flask_exporter import PrometheusMetrics
 from prometheus_client import Histogram
-from prometheus_client import Counter
+from prometheus_client import Gauge
 from prometheus_client.exposition import generate_latest
 
 logging.basicConfig(
@@ -37,9 +37,9 @@ subscriptions = {}
 user_states = {}
 
 # # Aggiunta una metrica per la frequenza di recupero dati meteorologici
-fetch_weather_counter = Counter(
-    'fetch_weather_requests',
-    'Number of requests to fetch weather data'
+active_subscriptions_gauge = Gauge(
+    'active_subscriptions',
+    'Number of active weather subscriptions'
 )
 
 # Aggiunta una metrica per i tempi di risposta delle richieste alle API meteorologiche
@@ -116,7 +116,7 @@ def manage_subscriptions():
                 return jsonify({'error': "Esiste gi\u00E0 una sottoscrizione per questa citt\u00E0 per l'utente specificato. Si prega di inserire una nuova citt\u00E0 o aggiornare la sottoscrizione esistente."}), 400
             elif subscription_exists_response.status_code == 404:
                 #  # Incrementa la metrica per la frequenza di recupero dati meteorologici
-                fetch_weather_counter.inc()
+                active_subscriptions_gauge.inc()
 
                 start_time = time.time()
 
@@ -207,6 +207,7 @@ def manage_subscriptions():
                 delete_subscription_response = requests.post(delete_subscription_url, json=subscription_exists_data)
                 
                 if delete_subscription_response.status_code == 200:
+                    active_subscriptions_gauge.dec()
                     return jsonify({'message': 'Sottoscrizione cancellata con successo!'}), 200
                 else:
                     return jsonify({'error': f"Errore durante la cancellazione della sottoscrizione: {delete_subscription_response.text}"}), 500

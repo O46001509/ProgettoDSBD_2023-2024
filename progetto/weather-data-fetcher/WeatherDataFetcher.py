@@ -1,10 +1,22 @@
 import requests
-import time, os, logging
+import os, logging
 from openweather_wrapper import OpenWeatherWrapper
+from prometheus_client import Gauge
+import time
+from prometheus_client.exposition import generate_latest
+from flask import Flask, Response
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.base import JobLookupError
+
 
 DATABASE_SERVICE_URL = "http://database-service:5004"
 
-INTERVALLO_NOTIFICHE = 20
+with open("intervallo.txt", 'r') as file:
+    contenuto = file.read()
+    INTERVALLO_NOTIFICHE = int(contenuto)
+
+last_first_notification_time = None
+last_notification_time = {}
 
 logging.basicConfig(
     level=logging.INFO,
@@ -13,6 +25,21 @@ logging.basicConfig(
 )
 
 time.sleep(5)
+
+app = Flask(__name__)
+
+notification_interval_gauge = Gauge(
+    'notification_interval_seconds',
+    'Effective interval between notifications in seconds'
+)
+
+
+
+@app.route('/metrics')
+def metrics():
+    # Restituisco le metriche Prometheus
+    return Response(generate_latest(), mimetype='text/plain')
+
 
 # Funzione per ottenere l'istante di tempo attuale
 def stampa_ora_attuale():
@@ -97,98 +124,128 @@ def check_conditions(subscription, weather_data):
             (weather_data['wind_speed'])*3.6 <= vento_max and
             weather_data['humidity'] <= umidita_max
     )
+
+def add_main_job(scheduler, seconds):
+    try:
+        scheduler.remove_job('main_job')  # Prova a rimuovere il job se esiste
+    except JobLookupError:
+        pass  # Se il job non esiste, non fare nulla
+    scheduler.add_job(main, 'interval', seconds=seconds, id='main_job')
+
 def main():
-    while True:
-        try:
-            # Recuperiamo gli user_name dal Weather Event Notifier
-            user_names_url = 'http://weather-event-notifier:5001/utenti'
-            user_names_response = requests.get(user_names_url)
-            user_names_response.raise_for_status()
-            # logging.info(f"Weather-data-fetcher --> user_names_response: {user_names_response}")
+    global last_first_notification_time
+    global INTERVALLO_NOTIFICHE
+    is_first_subscription = True
+    #while True:
+    try:
+        # Recuperiamo gli user_name dal Weather Event Notifier
+        user_names_url = 'http://weather-event-notifier:5001/utenti'
+        user_names_response = requests.get(user_names_url)
+        user_names_response.raise_for_status()
+        # logging.info(f"Weather-data-fetcher --> user_names_response: {user_names_response}")
 
-            if user_names_response.status_code == 200:
-                user_names = user_names_response.json()
-                print(f"User names: {user_names}")
+        if user_names_response.status_code == 200:
+            user_names = user_names_response.json()
+            logging.info(f"User names: {user_names}")
 
-                for user_name in user_names:
-                    # Recupero il chat_id per ogni user_name
-                    chat_id_url = f'http://weather-event-notifier:5001/chat_id?user_name={user_name}'
-                    chat_id_response = requests.get(chat_id_url)
-                    chat_id_response.raise_for_status()
-                    chat_id = chat_id_response.json().get('decrypted_chat_id')
-                    # logging.info(f"Weather-data-fetcher --> chat_id: {chat_id}")
+            for user_name in user_names:
+                # Recupero il chat_id per ogni user_name
+                chat_id_url = f'http://weather-event-notifier:5001/chat_id?user_name={user_name}'
+                chat_id_response = requests.get(chat_id_url)
+                chat_id_response.raise_for_status()
+                chat_id = chat_id_response.json().get('decrypted_chat_id')
+                # logging.info(f"Weather-data-fetcher --> chat_id: {chat_id}")
 
-                    interval_url = f"{DATABASE_SERVICE_URL}/recupera_intervallo?chat_id={chat_id}"
-                    interval_response = requests.get(interval_url)
-                    interval_response.raise_for_status()
-                    interval = interval_response.json().get('interval')
-                    
-                    # Recupero le sottoscrizioni per ogni user_name
-                    subscriptions_url = f'http://weather-event-notifier:5001/sottoscrizioni?user_name={user_name}'
-                    subscriptions_response = requests.get(subscriptions_url)
-                    subscriptions_response.raise_for_status()
-                    logging.info(f"Weather-data-fetcher --> interval: {interval}")
+                interval_url = f"{DATABASE_SERVICE_URL}/recupera_intervallo?chat_id={chat_id}"
+                interval_response = requests.get(interval_url)
+                interval_response.raise_for_status()
+                interval = interval_response.json().get('interval')
+                
+                # Recupero le sottoscrizioni per ogni user_name
+                subscriptions_url = f'http://weather-event-notifier:5001/sottoscrizioni?user_name={user_name}'
+                subscriptions_response = requests.get(subscriptions_url)
+                subscriptions_response.raise_for_status()
+                logging.info(f"Weather-data-fetcher --> interval: {interval}")
 
-                    if subscriptions_response.status_code == 200:
-                        subscriptions = subscriptions_response.json()
-                        # print(f"Sottoscrizioni per {user_name}: {subscriptions}")
-                        INTERVALLO_NOTIFICHE = interval
-                        logging.info(f"Weather-data-fetcher --> INTERVALLO: {INTERVALLO_NOTIFICHE}")
-                        # Processamento delle sottoscrizioni per l'utente corrente
-                        for subscription_info in subscriptions:
-                            city = subscription_info['citta']
-                            weather_data = fetch_weather_data(city)
-                            if weather_data:
+                if subscriptions_response.status_code == 200:
+                    subscriptions = subscriptions_response.json()
+                    # print(f"Sottoscrizioni per {user_name}: {subscriptions}")
+                    INTERVALLO_NOTIFICHE = interval
+                    with open('intervallo.txt', 'w') as file:
+                        file.write(str(interval))
+                    add_main_job(scheduler, INTERVALLO_NOTIFICHE)
 
-                            # logging.info(f"Weather-data-fetcher --> citta: {city}")
-                            # logging.info(f"Weather-data-fetcher --> info-meteo: {weather_data}")
+                    logging.info(f"Weather-data-fetcher --> INTERVALLO: {INTERVALLO_NOTIFICHE}")
+                    # Processamento delle sottoscrizioni per l'utente corrente
+                    logging.info(f"Subscriptions: {subscriptions}")
+                    for subscription_info in subscriptions:
+                
+                        city = subscription_info['citta']
+                        weather_data = fetch_weather_data(city)
+                        if weather_data:
 
-                                if check_conditions(subscription_info, weather_data):
-                                    logging.info(f"Weather-data-fetcher --> condizioni soddisfatte nella citta {city} cercata dall'utente {user_name}. Weather_data: {weather_data}")
-                                    # Se le condizioni sono soddisfatte, invio una richiesta al Notification Server
-                                    notification_data = {
-                                        'user_id': chat_id,
-                                        'user_name': user_name,
-                                        'message': f"Condizioni meteorologiche soddisfatte a {city} - Temperatura: {weather_data['temperature']:.2f}°C,"
-                                                f"Temperatura percepita: {weather_data['feel_temperature']:.2f}°C,"
-                                                f"Umidita': {weather_data['humidity']}%,"
-                                                f"Meteo generale: {weather_data['general_weather']},"
-                                                f"Velocita' del vento: {(weather_data['wind_speed']*3.6):.2f}km/h\n"
-                                                f"{stampa_ora_attuale()}"
-                                    }
+                        # logging.info(f"Weather-data-fetcher --> citta: {city}")
+                        # logging.info(f"Weather-data-fetcher --> info-meteo: {weather_data}")
 
-                                    # Invio della richiesta al Notification Server
-                                    notification_url = 'http://notification-service:5000/notifiche'
-                                    headers = {'Content-Type': 'application/json'}
-                                    requests.post(notification_url, json=notification_data, headers=headers)
-                                else:
-                                    logging.info(f"Weather-data-fetcher --> condizioni non soddisfatte nella citta {city} cercata dall'utente {user_name}.")
-                            else:
-                                logging.error("Nome della città scritto in modo sbagliato.")
-                                subscription_exists_data = {
+                            if check_conditions(subscription_info, weather_data):
+                                if is_first_subscription:
+                                    is_first_subscription = False
+                                    current_time = time.time()
+                                    if last_first_notification_time is not None:
+                                        interval = current_time - last_first_notification_time
+                                        notification_interval_gauge.set(interval)
+                                        logging.info(f"Weather-data-fetcher --> Intervallo effettivo tra le prime sottoscrizioni dei cicli: {interval} secondi")
+                                    last_first_notification_time = current_time
+                                logging.info(f"Weather-data-fetcher --> condizioni soddisfatte nella citta {city} cercata dall'utente {user_name}. Weather_data: {weather_data}")
+                                # Se le condizioni sono soddisfatte, invio una richiesta al Notification Server
+                                notification_data = {
+                                    'user_id': chat_id,
                                     'user_name': user_name,
-                                    'citta': city
+                                    'message': f"Condizioni meteorologiche soddisfatte a {city} - Temperatura: {weather_data['temperature']:.2f}°C,"
+                                            f"Temperatura percepita: {weather_data['feel_temperature']:.2f}°C,"
+                                            f"Umidita': {weather_data['humidity']}%,"
+                                            f"Meteo generale: {weather_data['general_weather']},"
+                                            f"Velocita' del vento: {(weather_data['wind_speed']*3.6):.2f}km/h\n"
+                                            f"{stampa_ora_attuale()}"
                                 }
-                                delete_subscription_url = f"{DATABASE_SERVICE_URL}/cancella_sottoscrizione"
-                                delete_subscription_response = requests.post(delete_subscription_url, json=subscription_exists_data)
-                                
-                                if delete_subscription_response.status_code == 200:
-                                    logging.error({'message': 'Sottoscrizione, scritta sbagliata, cancellata con successo!'}), 200
-                                else:
-                                    logging.error({'error': f"Errore durante la cancellazione della sottoscrizione, scritta sbagliata: {delete_subscription_response.text}"}), 500
 
-        except requests.exceptions.ConnectionError as e:
-            print(f"Errore di connessione: {e}")
-        except requests.exceptions.HTTPError as e:
-            print(f"Errore HTTP: {e}")
-        except Exception as e:
-            print(f"Errore sconosciuto: {e}")
+                                # Invio della richiesta al Notification Server
+                                notification_url = 'http://notification-service:5000/notifiche'
+                                headers = {'Content-Type': 'application/json'}
+                                requests.post(notification_url, json=notification_data, headers=headers)
+                            else:
+                                logging.info(f"Weather-data-fetcher --> condizioni non soddisfatte nella citta {city} cercata dall'utente {user_name}.")
+                        else:
+                            logging.error("Nome della città scritto in modo sbagliato.")
+                            subscription_exists_data = {
+                                'user_name': user_name,
+                                'citta': city
+                            }
+                            delete_subscription_url = f"{DATABASE_SERVICE_URL}/cancella_sottoscrizione"
+                            delete_subscription_response = requests.post(delete_subscription_url, json=subscription_exists_data)
+                            
+                            if delete_subscription_response.status_code == 200:
+                                logging.error({'message': 'Sottoscrizione, scritta sbagliata, cancellata con successo!'}), 200
+                            else:
+                                logging.error({'error': f"Errore durante la cancellazione della sottoscrizione, scritta sbagliata: {delete_subscription_response.text}"}), 500
+
+    except requests.exceptions.ConnectionError as e:
+        print(f"Errore di connessione: {e}")
+    except requests.exceptions.HTTPError as e:
+        print(f"Errore HTTP: {e}")
+    except Exception as e:
+        print(f"Errore sconosciuto: {e}")
 
         # Intervallo tra le verifiche meteorologiche
-        time.sleep(INTERVALLO_NOTIFICHE)
+        #time.sleep(INTERVALLO_NOTIFICHE)
 
 if __name__ == '__main__':
-    main()
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(main,  'interval', seconds=INTERVALLO_NOTIFICHE, id='main_job')  # Esegue main() ogni INTERVALLO_NOTIFICHE secondi
+    scheduler.start()
+
+    app.run(debug=True, use_reloader=False, host='0.0.0.0', port=5006)
+
 
 
 

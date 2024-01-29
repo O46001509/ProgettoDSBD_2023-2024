@@ -1,5 +1,5 @@
 global:
-  scrape_interval: 15s  # Intervallo di scraping globale
+  scrape_interval: 30s  # Intervallo di scraping globale
 
 scrape_configs:
   - job_name: 'weather-event-notifier'
@@ -17,6 +17,7 @@ scrape_configs:
   - job_name: 'prometheus'
     static_configs:
       - targets: ['prometheus:9090'] 
+        
 
   - job_name: 'database-service'
     static_configs:
@@ -35,6 +36,16 @@ scrape_configs:
   - job_name: 'cadvisor'
     static_configs:
       - targets: ['cadvisor:8080'] 
+      
+  - job_name: 'weather-data-fetcher'
+    static_configs:
+      - targets: ['weather-data-fetcher:5006']
+  
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets: ['alertmanager:9093']
+          
 
 rule_files:
-  - "rule.yml"
+  - "rules_sla_violation.yml"
