@@ -11,7 +11,7 @@ Progetto Elaborato del corso di DISTRIBUTED SYSTEMS AND BIG DATA.
 - [Installazione e Configurazione](#installazione-e-configurazione)
 - [Utilizzo](#utilizzo)
 - [Relazione Progetto](#relazione-progetto)
-    - [Abstrat](#abstract)
+    - [Abstract](#abstract)
     - [Scelte-Progettuali](#scelte-progettuali)
     - [API implementate](#api-implementate) 
 - [Autori](#autori)
@@ -162,6 +162,11 @@ git clone https://github.com/O46001509/ProgettoDSBD_2023-2024.git
 cd ProgettoDSBD_2023-2024
 ```
 
+oppure
+
+scarica il progetto come file zip (come mostrato in TestEsecuzioneSistema) ed estrai la
+cartella progetto.
+
 ### 2. Configurare le Variabili d'Ambiente:
 
 Copia il file .env.example come .env, che contiene le variabili d'ambiente del DB, l'API KEY per le richieste a OpenWeatherMap e il TOKEN del bot Telegram, nel caso in cui non fosse presente il file .env dopo la clonazione.
@@ -222,13 +227,17 @@ docker-compose up -d --build
 
 Se si vuole, invece, solo visualizzare le tabelle è possibile farlo in qualsiasi momento l'app è in esecuzione. Ex:# Dopo l'accesso al database ```bash SELECT * FROM subscriptions; ```
 Inoltre, se si scarica il zip da GitHub potrebbe esserci il seguente errore dopo la prima esecuzione del programma (a causa di push errate in GitHub che modificano o non inseriscono tutti i file presenti nella cartella locale postgres-data): 
+![photo_2024-01-31_23-25-13](https://github.com/O46001509/ProgettoDSBD_2023-2024/assets/48292788/49d9bcf2-953a-4722-bad1-423e4b775807)
+
 
 Se presente, interrompere l’esecuzione dei servizi e svuotare la cartella postgres-data, che si trova all’interno della cartella progetto. Dopo aver cancellato tutti i file, riavviare il sistema ```bash docker-compose up -d --build``` ed entrare nel DB (come spiegato sopra). Se dopo l’inserimento del nome del DB col comando ```bash \c weather_searches``` appare questo errore: 
+![photo_2024-01-31_23-25-18](https://github.com/O46001509/ProgettoDSBD_2023-2024/assets/48292788/ca83096b-4f27-4220-b61e-95e8d29fd703)
+
 
 creare il db ```bash CREATE DATABASE weather_searches;```. Fatto questo, riavviare il sistema nuovamente e come si vede anche nel pdf TestEsecuzioneSistema, non ci sarà più l’errore e sarà presente il database. Inoltre, saranno presenti anche le tabelle, anche se vuote.
 
 ### 6. Verifica l'Applicazione:
-L'applicazione sarà ora accessibile agli indirizzi specificati nelle configurazioni, dopo aver verificato che i microservizi siano attivi e funzionanti. Seguire a questo punto i passi della sezione Utilizzo.
+L'applicazione sarà ora accessibile agli indirizzi specificati nelle configurazioni, dopo aver verificato che i microservizi siano attivi e funzionanti. Seguire a questo punto i passi della sezione [Utilizzo](#utilizzo).
 
 ### 7. Accesso a strumenti di monitoraggio
 - Prometheus: http://localhost:9091
@@ -358,15 +367,15 @@ Il sistema ProgettoDSBD_2023-2024 implementa diverse API per gestire interazioni
        - `threshold` (int): Il valore soglia che rappresenta il limite massimo accettabile per la metrica SLA.
        - `Description` (string): descrizione della metrica.
 
-4.	Sla-Manager (/sla/status): 
-	- Descrizione: Consente di visualizzare lo stato delle metriche.
-	- Metodo: GET
-	- Endpoint: `http//localhost:5005/sla`
+4. **Sla-Manager (/sla/status):** 
+   - Descrizione: Consente di visualizzare lo stato delle metriche.
+   - Metodo: GET
+   - Endpoint: `http//localhost:5005/sla`
 	
-5.	Sla-Manager (/sla/violations): 
-	- Descrizione: Consente di visualizzare tutte le violazioni presenti.
-	- Metodo: GET.
-	- Endpoint: `http//localhost:5005/sla/violations`
+5. **Sla-Manager (/sla/violations):** 
+   - Descrizione: Consente di visualizzare tutte le violazioni presenti.
+   - Metodo: GET.
+   - Endpoint: `http//localhost:5005/sla/violations`
 
 
 ## Autori
