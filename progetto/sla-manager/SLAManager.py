@@ -1,101 +1,88 @@
 from flask import Flask, request, jsonify, Response
 import requests
-import os, time
-import logging
+import os, time, logging
 from datetime import datetime
+
 from prometheus_flask_exporter import PrometheusMetrics
 from prometheus_client import generate_latest, Counter
+
 from apscheduler.schedulers.background import BackgroundScheduler
 
-logging.basicConfig(level=logging.INFO)
+from timelocallogging_wrapper import LocalTimeFormatter
 
+from create_table_sla import *
+from manage_sla_functions import *
+
+
+
+# --------------------------------------------------
+formatter = LocalTimeFormatter(
+    fmt='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
+# --------------------------------------------------
+
+# attesa nel caso in cui il database-service debba ancora avviarsi.
 time.sleep(4)
 
 app = Flask(__name__)
 
-# Configura le metriche Prometheus
 metrics = PrometheusMetrics(app)
 
 # Configurazione microservizio database e Prometheus
 DATABASE_SERVICE_URL = os.environ.get('DATABASE_SERVICE_URL', 'http://database-service:5004')
 PROMETHEUS_URL = os.environ.get('PROMETHEUS_URL', 'http://prometheus:9090')
 
-SLA_CPU_USAGE_THRESHOLD = 0.7  # 70% di utilizzo della CPU
+# soglia di default
+SLA_MEMORY_USAGE_THRESHOLD_MB = 100
 
-# Inizializzazione del Scheduler per attività pianificate
+# Inizializzazione del Scheduler per le attività pianificate
+# deljob evaluate_sla.
 scheduler = BackgroundScheduler()
 
-def create_sla_definitions_table():
-    try:
-        response = requests.post(f"{DATABASE_SERVICE_URL}/crea_tabella_sla_definitions")
-        response.raise_for_status()
-        logging.info("Tabella della sla_definitons creata con successo")
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Errore durante la creazione della tabella sla_definitions: {e}")
-
-def create_sla_violations_table():
-    try:
-        response = requests.post(f"{DATABASE_SERVICE_URL}/crea_tabella_sla_violations")
-        response.raise_for_status()
-        logging.info("Tabella dell sla_violations creata con successo")
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Errore durante la creazione della tabella sla_violations: {e}")
-
+# creazione delle tabelle di metriche e vuiolazioni
 create_sla_definitions_table()
 create_sla_violations_table()
 
+# Creazione metrica che può essere selezionata dall'UI di Prometheus
+# come usage_memory_by_service_total,
+# per visualizzare le violazioni di memoria. 
+sla_violations_counters = Counter(
+    'usage_memory_by_service',
+    'Number of active weather subscriptions'
+)
+sla_violations_counter = Counter('sla_violations', 'Number of SLA violations')
 
 
-
-# Endpoint /metrics per esporre le metriche a Prometheus
 @app.route('/metrics')
 def metrics():
     return Response(generate_latest(), mimetype='text/plain')
 
- #Aggiunta di una definizione di SLA di esempio all'avvio
-def add_example_sla_definition():
-    example_sla_metric = {
-        'metric_name': 'fetch_weather_requests_total',  # Nome della metrica
-        'threshold': 3,  # 
-        'description': 'Numero massimo di richieste di dati meteorologici ammesse per evitare il sovraccarico del servizio'
-    }
-    try:
-        response = requests.post(f"{DATABASE_SERVICE_URL}/add_sla_metric", json=example_sla_metric)
-        response.raise_for_status()
-        logging.info("Definizione di SLA di esempio aggiunta con successo")
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Errore durante l'aggiunta della definizione di SLA di esempio: {e}")
-
-# Endpoint per la gestione degli SLA
+# API per la creazione, l'aggiornamento, la cancellazione e la verifica di metriche SLA
 @app.route('/sla', methods=['POST', 'GET', 'PUT', 'DELETE'])
 def manage_sla():
     if request.method == 'POST':
-        # Aggiungo una nuova definizione di SLA
-        data = request.get_json()
-        response = requests.post(f"{DATABASE_SERVICE_URL}/add_sla_metric", json=data)
-        return jsonify(response.json()), response.status_code
-    
+        return added_sla_to_the_db()
     elif request.method == 'GET':
-        # Recupero le definizioni di SLA
-        response = requests.get(f"{DATABASE_SERVICE_URL}/get_sla_metrics")
-        return jsonify(response.json()), response.status_code
-    
+        return obtaining_sla_from_the_db()
     elif request.method == 'PUT':
-        # Aggiorno una definizione di SLA esistente
-        data = request.get_json()
-        response = requests.put(f"{DATABASE_SERVICE_URL}/update_sla_metric", json=data)
-        return jsonify(response.json()), response.status_code
-    
+        return update_sla_in_the_db()
     elif request.method == 'DELETE':
-        # Rimuovo una definizione di SLA
-        data = request.get_json()
-        response = requests.delete(f"{DATABASE_SERVICE_URL}/delete_sla_metric", json=data)
-        return jsonify(response.json()), response.status_code
+        return deleting_sla_from_the_db()
+    else:
+        return jsonify({'error': 'Metodo non supportato'}), 405
 
-# Endpoint per la visualizzazione delle violazioni SLA
+
 @app.route('/sla/violations', methods=['GET'])
 def sla_violations():
-    # Implementazione della funzionalità di recupero del numero di violazioni SLA
+    # Implemento la funzionalità di recupero del numero di violazioni SLA
     response = requests.get(f"{DATABASE_SERVICE_URL}/get_sla_violations")
     return jsonify(response.json()), response.status_code
 
@@ -112,21 +99,7 @@ def sla_probability():
     # non siamo arrivati a implementare questa parte
     print(metric_name)
 
-def add_notification_interval_sla_definition():
-    notification_interval_sla = {
-        'metric_name': 'notification_interval_seconds',  # Nome della metrica che hai definito nel weather-data-fetcher
-        'threshold': 10,  # Soglia percentuale oltre la quale si considera una violazione
-        'description': "La differenza tra l\'intervallo effettivo delle notifiche e l\'intervallo previsto non deve superare il 10%"
-    }
-    try:
-        response = requests.post(f"{DATABASE_SERVICE_URL}/add_sla_metric", json=notification_interval_sla)
-        response.raise_for_status()
-        logging.info("Definizione di SLA per l'intervallo delle notifiche aggiunta con successo")
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Errore durante l'aggiunta della definizione di SLA per l'intervallo delle notifiche: {e}")
-
-add_notification_interval_sla_definition()
-
+# Funzione per recuperare il valore attuale da Prometheus
 def fetch_metric_value(metric_name):
     try:
         prometheus_query_url = f"{PROMETHEUS_URL}/api/v1/query"
@@ -137,78 +110,111 @@ def fetch_metric_value(metric_name):
         if data:
             return data[0]['value'][1]  # Valore attuale della metrica
     except requests.exceptions.RequestException as e:
-        logging.error(f"Errore durante il recupero del valore della metrica {metric_name}: {e}")
+        logger.error(f"Errore durante il recupero del valore della metrica {metric_name}: {e}")
     return None
 
+# Funzione per il recupero dell'uso della memoria
 def fetch_prometheus_query(query):
     try:
         response = requests.get(f'{PROMETHEUS_URL}/api/v1/query', params={'query': query})
         response.raise_for_status()
         results = response.json()['data']['result']
+        
         return results
+        
     except requests.exceptions.RequestException as e:
-        logging.error(f"Errore durante l'esecuzione della query Prometheus {query}: {e}")
+        logger.error(f"Errore durante l'esecuzione della query Prometheus {query}: {e}")
         return []
-
-def check_cpu_usage():
+    
+def fetch_container_memory_usage(container_name):
     try:
-        query = 'job:cpu_usage:avg_over_time_5m'
+        query = f'container_memory_usage_bytes{{container_label_com_docker_compose_service="{container_name}"}}'
         results = fetch_prometheus_query(query)
-        for result in results:
-            cpu_usage = 1 - float(result['value'][1])  # Considerando l'utilizzo come 1 - idle
-            if cpu_usage > SLA_CPU_USAGE_THRESHOLD:
-                logging.warning(f'Alert: High CPU usage detected: {cpu_usage * 100:.2f}%')
-                # Qui dovrebbero essere implementate azioni correttive o inviare notifiche, 
-                # ma non l'abbiamo fatto.
+        logger.info(f"Result{results}")
+        if results:
+            memory_usage_bytes = float(results[0]['value'][1])  # Valore attuale dell'utilizzo della memoria in byte
+            return memory_usage_bytes
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Errore durante il recupero dell'utilizzo della memoria del container {container_name}: {e}")
+    return None
+
+
+
+def check_memory_usage(threshold, sla_id):
+    try:
+        memory_usage_bytes = fetch_container_memory_usage('notification-service')
+        mem_stamp = memory_usage_bytes / (1024 ** 2) # Conversione in MB
+        logger.info(f"Mem -->{mem_stamp}")
+        if memory_usage_bytes and (memory_usage_bytes / (1024 ** 2)) > threshold:
+            logger.warning(f'Alert: High memory usage detected for container: {memory_usage_bytes / (1024 ** 2):.2f} MB')
+
+            
+            sla_violations_counters.inc()
+
+            violation_data = {
+                            'sla_id': sla_id,
+                            'violation_time': datetime.utcnow().isoformat(),
+                            'actual_value': memory_usage_bytes
+                        }
+            requests.post(f"{DATABASE_SERVICE_URL}/record_sla_violation", json=violation_data)
+            logger.info(f"Violazione SLA: l'utilizzo della memoria del notification-service supera i {threshold} MB")
     except Exception as e:
-        logging.error(f"Errore durante il controllo dell'utilizzo della CPU: {e}")
+        logger.error(f"Errore durante il controllo dell'utilizzo della memoria del container: {e}")
 
-sla_violations_counter = Counter('sla_violations', 'Number of SLA violations')
-
+# Per ogni metrica SLA inserita, controlliamo se la soglia rispettata.
+# Se non lo è, crea una violazione.  
 def evaluate_sla():
     try:
         sla_metrics = requests.get(f"{DATABASE_SERVICE_URL}/get_sla_metrics").json()
+        logger.info(f"Lista metriche-->{sla_metrics}")
+        
         for metric in sla_metrics:
             metric_name = metric['metric_name']
-            actual_value = fetch_metric_value(metric_name)
-            threshold_percentage = metric.get('threshold', 0)  # Ottieni la soglia percentuale se definita
+            threshold = metric.get('threshold', 0)  # Ottengo la soglia se definita
+          
+            if metric_name == 'notification_interval_seconds':
+                actual_value = fetch_metric_value(metric_name)
+                
+                if actual_value is not None:
+                    intervallo_effettivo = float(actual_value)
+                    with open('intervallo.txt', 'r') as file:
+                        intervallo_previsto = int(file.read())
+                    intervallo_effettivo = float(actual_value)
+                    logger.info(f"Metric-->{metric}")
+                    logger.info(f"Intervallo effettivo -->{intervallo_effettivo}")
+                    # Calcolo la soglia assoluta (ex: 10% dell'intervallo previsto)
+                    threshold = intervallo_previsto * (1 + float(threshold) / 100.0)
+                    logger.info(f"teshold: {threshold}")
+                    
+                
+                    # Controllo se l'intervallo effettivo supera la soglia
+                    if intervallo_effettivo > float(threshold):
+                        logger.info("Violazione verificata")
+                        sla_violations_counter.inc()
+                        # Registro la violazione
+                        violation_data = {
+                            'sla_id': metric['sla_id'],
+                            'violation_time': datetime.utcnow().isoformat(),
+                            'actual_value': actual_value
+                        }
+                        requests.post(f"{DATABASE_SERVICE_URL}/record_sla_violation", json=violation_data)
+                        logger.info(f"Violazione SLA: l'intervallo effettivo delle notifiche supera del {threshold}% l'intervallo previsto.")
             
-            # Controllo aggiuntivo per la metrica dell'intervallo delle notifiche
-            if metric_name == 'notification_interval_seconds' and actual_value is not None:
-                # Calcola l'intervallo previsto dal file
-                with open('intervallo.txt', 'r') as file:
-                    intervallo_previsto = int(file.read())
-                intervallo_effettivo = float(actual_value)
-                logging.info(f"Intervallo effettivo -->{intervallo_effettivo}")
-                # Calcola la soglia assoluta (10% dell'intervallo previsto)
-                threshold = intervallo_previsto * (1 + float(threshold_percentage) / 100.0)
-                logging.info(f"teshold: {threshold}")
-                # Controlla se l'intervallo effettivo supera la soglia
-                if intervallo_effettivo > float(threshold):
-                    logging.info("Violazione verificata")
-                    # Incrementa il contatore di violazioni SLA
-                    sla_violations_counter.inc()
-                    # Resto del codice per gestire la violazione...
+            elif metric_name == 'usage_memory_by_service':
+            
+                s_id = metric['sla_id']
+                check_memory_usage(float(threshold),s_id)
+            
 
-
-                    # Registra la violazione
-                    violation_data = {
-                        'sla_id': metric['sla_id'],
-                        'violation_time': datetime.utcnow().isoformat(),  # Converto datetime in una stringa ISO
-                        'actual_value': actual_value
-                    }
-                    requests.post(f"{DATABASE_SERVICE_URL}/record_sla_violation", json=violation_data)
-                    logging.info(f"Violazione SLA: l'intervallo effettivo delle notifiche supera del {threshold_percentage}% l'intervallo previsto.")
     except Exception as e:
-        logging.error(f"Errore durante la valutazione delle SLA: {e}")
+        logger.error(f"Errore durante la valutazione delle SLA: {e}")
 
 
-# Schedulazione della valutazione SLA ad intervalli regolari
+# Schedulazione della valutazione SLA ad intervalli regolari. 
+# Il job evaluate_sla elabora periodicamente se ci sono violazioni.
+
 def schedule_sla_evaluation():
-    with open('intervallo.txt', 'r') as file:
-        intervallo_previsto = int(file.read())
-    scheduler.add_job(evaluate_sla, 'interval', seconds=30)  # Esegue ogni minuto
-    scheduler.add_job(check_cpu_usage, 'interval', minutes=1)  # Esegue ogni minuto
+    scheduler.add_job(evaluate_sla, 'interval', seconds=30)  # Esegue ogni 30s
     scheduler.start()
 
 @app.route('/sla/status', methods=['GET'])
@@ -230,8 +236,6 @@ def get_sla_status():
         return jsonify({'error': f"Errore durante la richiesta dello stato SLA: {e}"}), 500
 
 
-
-
 @app.route('/sla/violations/count', methods=['GET'])
 def get_violations_count():
     time_frame = request.args.get('time_frame', default='1h')  # Può essere '1h', '3h', '6h'
@@ -249,6 +253,10 @@ def get_violations_count():
         return jsonify({'error': f"Errore durante la richiesta del conteggio delle violazioni SLA: {e}"}), 500
 
 
+def calculate_probability_of_violation(metric_name, time_frame):
+    # Pseudocodice per calcolare la probabilità di violazione
+    probability = 0.0 
+    return probability
 
 @app.route('/sla/violation_probability', methods=['GET'])
 def get_violation_probability():
@@ -259,11 +267,6 @@ def get_violation_probability():
     
     probability = calculate_probability_of_violation(metric_name, time_frame)
     return jsonify({'metric_name': metric_name, 'time_frame': time_frame, 'probability': probability}), 200
-
-def calculate_probability_of_violation(metric_name, time_frame):
-    # Pseudocodice per calcolare la probabilità di violazione
-    probability = 0.0 
-    return probability
 
 
 if __name__ == '__main__':

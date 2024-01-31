@@ -20,7 +20,7 @@ Progetto Elaborato del corso di DISTRIBUTED SYSTEMS AND BIG DATA.
 ## Descrizione
 
 Il progetto prevede l'implementazione di un'applicazione distribuita tramite Docker-Compose che consente agli utenti, una volta registrati tramite il bot di telegram "giosa-weather-alerts", di inserire delle sottoscrizioni per poter ricevere le notifiche sulle informazioni meteo delle città interessate e secondo le condizioni scelte. Abbiamo cercato quindi di seguire l'Applicazione1, descritta nei requisiti dell'elaborato, personalizzandola secondo ciò che abbiamo scelto di implementare.\n
-Nella cartella Documentazione è presente un pdf con la spiegazione del progetto, dei servizi e dei concetti chiave impiegati, oltre ad esserci già in questo file Readmi una breve descrizione e tutte le informazioni richieste per la consegna dell'elaborato stesso, come l'abstract e le scelete progettuali.
+Nella cartella Documentazione è presente un pdf con la spiegazione del progetto, dei servizi e dei concetti chiave impiegati, oltre ad esserci già in questo file Readmi una breve descrizione e tutte le informazioni richieste per la consegna dell'elaborato stesso, come l'abstract e le scelte progettuali. Inoltre, sempre nella cartella Documentazione, è presente un pdf "Test esecuzione sistema", in cui attraverso delle immagini si vede la prova della verifica delle funzionalità dell'applicazione.
 
 ## Architettura del Sistema
 ## Diagramma Architetturale

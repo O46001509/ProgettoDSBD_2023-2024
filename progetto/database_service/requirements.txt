@@ -1,5 +1,4 @@
 Flask
 psycopg2
-cryptography
 prometheus_flask_exporter
 prometheus_client

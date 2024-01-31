@@ -6,23 +6,30 @@ from prometheus_flask_exporter import PrometheusMetrics
 from prometheus_client import Histogram
 from prometheus_client import Gauge
 from prometheus_client.exposition import generate_latest
+from timelocallogging_wrapper import LocalTimeFormatter
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+formatter = LocalTimeFormatter(
+    fmt='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
+
+# attesa nel caso in cui il database-service debba ancora avviarsi.
 time.sleep(4)
 
 app = Flask(__name__)
 
 DATABASE_SERVICE_URL = "http://database-service:5004"
-# TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN_FILE", "NO_VARIABLE_FOUND")
 
 metrics = PrometheusMetrics(app)
 
-# Aggiunta metriche personalizzate
+# Primo test info Prometheus
 metrics.info("app_info", "Application info", version="1.0.0")
 @app.route('/')
 def home():
@@ -36,36 +43,36 @@ def metrics():
 subscriptions = {}
 user_states = {}
 
-# # Aggiunta una metrica per la frequenza di recupero dati meteorologici
+# Aggiunta una metrica per la quantità di recupero eventi sottoscritti dagli utenti
 active_subscriptions_gauge = Gauge(
     'active_subscriptions',
     'Number of active weather subscriptions'
 )
 
-# Aggiunta una metrica per i tempi di risposta delle richieste alle API meteorologiche
+# Aggiunta una metrica per i tempi di risposta delle richieste di nuove sottoscrizioni
 fetch_weather_duration = Histogram(
     'fetch_weather_duration_seconds',
     'Duration of fetch weather requests',
-    buckets=[0.1, 0.5, 1, 2, 10]
+    buckets=[1, 2, 5]
 )
 
 # Funzione per creare la tabella degli utenti
 def create_users_table():
     try:
         response = requests.post(f"{DATABASE_SERVICE_URL}/crea_tabella_utenti")
-        response.raise_for_status()  # Solleva un'eccezione per codici di stato HTTP diversi da 2xx
-        logging.info("Tabella degli utenti creata con successo")
+        response.raise_for_status()  
+        logger.info("Weather-event-notifier --> Tabella degli utenti creata con successo")
     except requests.exceptions.RequestException as e:
-        logging.error(f"Errore durante la creazione della tabella degli utenti: {e}")
+        logger.error(f"Weather-event-notifier --> Errore durante la creazione della tabella degli utenti: {e}")
 
 # Funzione per creare la tabella delle sottoscrizioni
 def create_subscriptions_table():
     try:
         response = requests.post(f"{DATABASE_SERVICE_URL}/crea_tabella_sottoscrizioni")
         response.raise_for_status()
-        logging.info("Tabella delle sottoscrizioni creata con successo")
+        logger.info("Weather-event-notifier --> Tabella delle sottoscrizioni creata con successo")
     except requests.exceptions.RequestException as e:
-        logging.error(f"Errore durante la creazione della tabella delle sottoscrizioni: {e}")
+        logger.error(f"Weather-event-notifier --> Errore durante la creazione della tabella delle sottoscrizioni: {e}")
 
 def get_subscriptions():
     try:
@@ -79,6 +86,7 @@ def get_subscriptions():
 create_users_table()
 create_subscriptions_table()
 
+# API per la creazione, l'aggiornamento, la cancellazione e la verifica di sottoscrizioni
 @app.route('/sottoscrizioni', methods=['GET', 'POST','DELETE','PUT'])
 def manage_subscriptions():
     if request.method == 'GET':
@@ -115,9 +123,10 @@ def manage_subscriptions():
             if subscription_exists_response.status_code == 200:
                 return jsonify({'error': "Esiste gi\u00E0 una sottoscrizione per questa citt\u00E0 per l'utente specificato. Si prega di inserire una nuova citt\u00E0 o aggiornare la sottoscrizione esistente."}), 400
             elif subscription_exists_response.status_code == 404:
-                #  # Incrementa la metrica per la frequenza di recupero dati meteorologici
+                # Incremento la metrica per ogni nuova sottoscrizione
                 active_subscriptions_gauge.inc()
 
+                # simulo la durata della chiamata della richiesta
                 start_time = time.time()
 
                 chat_id_service_url = f'{DATABASE_SERVICE_URL}/chat_id?user_name={user_name}'
@@ -130,16 +139,17 @@ def manage_subscriptions():
                     user_exists_data = user_exists_response.json()
 
                     if not user_exists_data:
-                        #  interruzione immediata dell'esecuzione dell'endpoint /sottoscrizioni
+                        # interruzione immediata dell'esecuzione dell'endpoint /sottoscrizioni
                         abort(400, {'error': 'Utente non trovato nel database. Registrati, pigiando il coamndo start nel bot telegram "giosa-weather-alerts", prima di creare una sottoscrizione.'})
 
                     # L'utente è presente, procedo con la creazione della sottoscrizione
                     response = requests.post(f"{DATABASE_SERVICE_URL}/sottoscrizioni", json=data)
                     response.raise_for_status()
-                    logging.info("Sottoscrizione creata con successo")
+                    logger.info("Weather-event-notifier --> Sottoscrizione creata con successo")
 
-                    # # Misuro il tempo di risposta e aggiorna la metrica
+                    # Misuro il tempo di risposta e aggiorno la metrica
                     duration = time.time() - start_time
+                    # mostro la durata della richiesta per il monitoraggio
                     fetch_weather_duration.observe(duration)
 
                     return jsonify({'message': 'Sottoscrizione creata con successo!'}), 201
@@ -150,7 +160,7 @@ def manage_subscriptions():
                 return jsonify({'error': 'Errore durante la verifica dell\'esistenza della sottoscrizione'}), 500
 
         except requests.exceptions.RequestException as e:
-            logging.error(f"Errore durante la creazione della sottoscrizione: {e}")
+            logger.error(f"Weather-event-notifier --> Errore durante la creazione della sottoscrizione: {e}")
             abort(500, {'error': 'Errore durante la creazione della sottoscrizione.'})
     elif request.method == 'PUT':
         try:
@@ -185,7 +195,7 @@ def manage_subscriptions():
                 return jsonify({'error': 'Errore durante la verifica dell\'esistenza della sottoscrizione'}), 500
 
         except requests.exceptions.RequestException as e:
-            logging.error(f"Errore durante l'aggiornamento della sottoscrizione: {e}")
+            logger.error(f"Weather-event-notifier --> Errore durante l'aggiornamento della sottoscrizione: {e}")
             abort(500, {'error': "Errore durante l'aggiornamento della sottoscrizione."})
     elif request.method == 'DELETE':
         # Cancellazione di una sottoscrizione
@@ -216,7 +226,7 @@ def manage_subscriptions():
                 return jsonify({'error': 'La sottoscrizione non esiste'}), 404
 
         except requests.exceptions.RequestException as e:
-            logging.error(f"Errore durante la cancellazione della sottoscrizione: {e}")
+            logger.error(f"Weather-event-notifier --> Errore durante la cancellazione della sottoscrizione: {e}")
             abort(500, {'error': 'Errore durante la cancellazione della sottoscrizione.'})
     
 @app.route('/utenti', methods=['GET'])
@@ -227,7 +237,7 @@ def get_user_names():
         user_names = response.json()
         return jsonify(user_names), 200
     except requests.exceptions.RequestException as e:
-        logging.error(f"Errore durante la richiesta degli user_name: {e}")
+        logger.error(f"Weather-event-notifier --> Errore durante la richiesta degli user_name: {e}")
         return jsonify({'error': f"Errore durante la richiesta degli user_name: {e}"}), 500
     
 @app.route('/chat_id', methods=['GET'])
@@ -243,7 +253,7 @@ def get_chat_id_by_user_name():
 
         if chat_id_response.status_code == 200:
             chat_id_data = chat_id_response.json()
-            logging.info(f"chat_id recuperato{chat_id_data['decrypted_chat_id']} + result {chat_id_response}")
+            logger.info(f"Weather-event-notifier --> chat_id recuperato: ********* + result {chat_id_response}")
             return jsonify({'decrypted_chat_id': chat_id_data['decrypted_chat_id']}), 200
         else:
             return jsonify({'error': f"Errore durante la richiesta del chat_id: {chat_id_response.text}"}), 500

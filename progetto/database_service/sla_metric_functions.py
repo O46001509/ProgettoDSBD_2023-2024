@@ -1,18 +1,27 @@
 from flask import jsonify, request
 import logging
+from timelocallogging_wrapper import LocalTimeFormatter
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+# ---------------------------------------------------
+formatter = LocalTimeFormatter(
+    fmt='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
+# ---------------------------------------------------
 
 def request_get_sla_metrics(cur):
     try:
         cur.execute("SELECT * FROM sla_definitions")
         sla_metrics = cur.fetchall()
         
-        # Converto i risultati in un formato più leggibile/maneggevole
+        # Converto i risultati in un formato più leggibile
         sla_metrics_list = []
         for metric in sla_metrics:
             sla_metrics_list.append({
@@ -22,10 +31,10 @@ def request_get_sla_metrics(cur):
                 'description': metric[3]
             })
         
-        logging.info(f"SLA_metrics: {sla_metrics_list}")
+        logger.info(f"SLA_metrics: {sla_metrics_list}")
         return jsonify(sla_metrics_list), 200
     except Exception as e:
-        logging.error(f"Errore durante il recupero delle metriche SLA: {e}")
+        logger.error(f"Errore durante il recupero delle metriche SLA: {e}")
         return jsonify({'error': f"Errore durante il recupero delle metriche SLA: {e}"}), 500
     
 def aggiorna_metrica(conn, cur):
@@ -45,10 +54,22 @@ def cancella_metrica(conn, cur):
     data = request.get_json()
     sla_id = data['sla_id']
     
-    cur.execute("DELETE FROM sla_definitions WHERE sla_id = %s", (sla_id,))
-    conn.commit()
-    
-    return jsonify({'message': 'SLA metric deleted successfully'}), 200
+    try:
+        # Prima elimino tutte le violazioni associate alla metrica...
+        cur.execute("DELETE FROM sla_violations WHERE sla_id = %s", (sla_id,))
+        conn.commit()
+        
+        # ...poi elimino la metrica stessa, poiché le due tabelle, sla_definitions 
+        # e sla_violations.
+        cur.execute("DELETE FROM sla_definitions WHERE sla_id = %s", (sla_id,))
+        conn.commit()
+        
+        return jsonify({'message': 'SLA metric and associated violations deleted successfully'}), 200
+    except Exception as e:
+        # Se qualcosa va storto, logga l'errore e restituisci un messaggio di errore
+        logging.error(f"Errore durante l'eliminazione della metrica SLA e delle violazioni associate: {e}")
+        return jsonify({'error': f"Errore durante l'eliminazione della metrica SLA e delle violazioni associate: {e}"}), 500
+
 
 def aggiunta_metrica(conn, cur):
     data = request.get_json()

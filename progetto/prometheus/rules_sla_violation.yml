@@ -1,11 +1,26 @@
 groups:
-- name: sla_alerts
+# Regola per stabilire quando arriva l'allerta: se c'è una nuova violazione
+# relativa alla metrica notification_interval_seconds.
+- name: interval_alerts
   rules:
-  - alert: SLAViolation
+  - alert: SLAViolationInterval
     expr: increase(sla_violations_total[1m]) > 0
     for: 30s
     labels:
       severity: critical
     annotations:
-      summary: "SLA Violation Detected"
-      description: "An SLA violation has been detected."
+      summary: "SLA Violation Detected for Interval"
+      description: "An SLA violation has been detected for the notification interval."
+
+# Regola per stabilire quando arriva l'allerta: se c'è una nuova violazione
+# relativa alla metrica usage_memory_by_service.
+- name: memory_alerts
+  rules:
+  - alert: SLAViolationMemory
+    expr: increase(usage_memory_by_service_total[1m]) > 0
+    for: 30s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Memory Usage SLA Violation Detected"
+      description: "An SLA violation has been detected for memory usage."

@@ -1,7 +1,7 @@
 import os
 
-# Chiave segreta di 32 byte (256 bit)
-SECRET_KEY = os.environ.get('SECRET_KEY',111111111)  # Cambia la chiave segreta
+SECRET_KEY = os.environ.get('SECRET_KEY',111111111)  
+# Da cambiare la chiave segreta o il meccanismo di sicurezza per un'implementazione più robusta.
 
 # Funzione per cifrare il chat_id
 def encrypt_chat_id(chat_id):

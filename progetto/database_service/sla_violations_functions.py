@@ -1,18 +1,27 @@
 from flask import request, jsonify
 import logging
+from timelocallogging_wrapper import LocalTimeFormatter
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+# --------------------------------------------------
+formatter = LocalTimeFormatter(
+    fmt='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
+# --------------------------------------------------
 
 def aggiunta_violazione(conn, cur):
     data = request.get_json()
     sla_id = data['sla_id']
     violation_time = data['violation_time']
     actual_value = data['actual_value']
-    logging.info(f"Record: {actual_value}, {violation_time} ")
+    logger.info(f"Record: {actual_value}, {violation_time} ")
     
     cur.execute("INSERT INTO sla_violations (sla_id, violation_time, actual_value) VALUES (%s, %s, %s)",
                 (sla_id, violation_time, actual_value))
@@ -20,6 +29,7 @@ def aggiunta_violazione(conn, cur):
     
     return jsonify({'message': 'SLA violation recorded successfully'}), 201
 
+# Metodo non testato.
 def conta_violazioni(cur):
     time_frame = request.args.get('time_frame', default='1h')  # Può essere '1h', '3h', '6h'
     try:

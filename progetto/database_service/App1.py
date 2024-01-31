@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request, Response
-import psycopg2, time, os, logging
+import time, logging
 from prometheus_flask_exporter import PrometheusMetrics
 from prometheus_client import generate_latest
 from create_table_functions import *
@@ -7,10 +7,25 @@ from subsriptions_funcions import *
 from users_functions import *
 from sla_metric_functions import *
 from sla_violations_functions import *
+from timelocallogging_wrapper import LocalTimeFormatter
+from configuration_DB import connect_to_database
 
 
-logging.basicConfig(level=logging.INFO)
+# --------------------------------------------------
+formatter = LocalTimeFormatter(
+    fmt='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
+# --------------------------------------------------
+
+# Delay inserito per attendere l'avvio del servizio postgres.
 time.sleep(3)
 
 app = Flask(__name__)
@@ -20,20 +35,6 @@ metrics = PrometheusMetrics(app)
 @app.route('/metrics')
 def metrics():
     return Response(generate_latest(), mimetype='text/plain')
-
-host = os.environ.get('POSTGRES_HOST','NO VARIABLE POSTGRES_HOST'),
-user = os.environ.get('POSTGRES_USER','NO VARIABLE POSTGRES_USER'),
-password = os.environ.get('POSTGRES_PASSWORD','NO VARIABLE POSTGRES_PASSWORD'),
-database = os.environ.get('POSTGRES_DATABASE','NO VARIABLE POSTGRES_DATABASE')
-
-#connessione al db
-conn = psycopg2.connect(    
-        host = host[0],
-        port = 5432,
-        user = user[0],
-        password = password[0],
-        database = database)
-cur = conn.cursor()
 
 @app.route('/crea_tabella_utenti', methods=['POST'])
 def create_users():
@@ -82,8 +83,6 @@ def receive_notification():
     cur.execute("SELECT * FROM subscriptions WHERE user_name = %s", (user_name,))
     subscription = cur.fetchone()
     if subscription:
-        # Invio notifica all'utente usando le informazioni della sottoscrizione
-        # ... ancora da gestire e vedere se usare
         print(subscription)
 
     return jsonify({'message': 'Notifica inviata con successo!'}), 200
@@ -114,6 +113,19 @@ def update_user():
 @app.route('/aggiorna_intervallo', methods=['PUT'])
 def update_user_interval():
     return aggiorna_intervallo(conn, cur)
+
+@app.route('/aggiorna_intervallo_tutti', methods=['PUT'])
+def aggiorna_intervallo_tutti_endpoint():
+    return aggiorna_intervallo_tutti(conn, cur)
+
+@app.route('/recupera_intervallo_primo_utente', methods=['GET'])
+def recupera_intervallo_primo_utente_endpoint():
+    intervallo = recupera_intervallo_primo_utente(cur)
+    if intervallo is not None:
+        return jsonify({'intervallo': intervallo}), 200
+    else:
+        return jsonify({'error': 'Impossibile recuperare l\'intervallo del primo utente'}), 500
+
     
 @app.route('/utenti_user_name', methods=['GET'])
 def get_all_user_names():
@@ -136,7 +148,6 @@ def get_subscriptions_by_user_name():
                 'subscription_id': subscription[0],
                 'chat_id': subscription[1],
                 'user_name': subscription[2],
-                # Altre colonne che desideri includere
             })
 
         return jsonify(subscriptions_list), 200
@@ -147,6 +158,22 @@ def get_subscriptions_by_user_name():
 def get_chat_id_by_user_name():
     return get_chat_id(cur)
 
+@app.route('/recupera_primo_user_name', methods=['GET'])
+def recupera_primo_user_name():
+    try:
+        # Seleziona l'user_name dall'utente con l'ID più basso (o un altro criterio)
+        cur.execute("SELECT user_name FROM users ORDER BY id ASC LIMIT 1")
+        result = cur.fetchone()
+        if result:
+            user_name = result[0]
+            logger.info(f"User_name recuperato per il primo utente: {user_name}")
+            return jsonify({'user_name': user_name}), 200
+        else:
+            logger.error("Nessun utente trovato nel database.")
+            return jsonify({'error': "Nessun utente trovato nel database."}), 404
+    except Exception as e:
+        logger.error(f"Errore durante il recupero del primo user_name: {e}")
+        return jsonify({'error': f"Errore durante il recupero del primo user_name: {e}"}), 500
 
 # ----------------------- Gestione SLA-METRICS & VIOLATIONS DB ---------------------------------------
 
@@ -182,9 +209,11 @@ def count_sla_violations():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5004)
-    cur.close()
-    conn.close()
+    conn, cur = connect_to_database()
+    if conn is not None:
+        app.run(debug=True, host='0.0.0.0', port=5004)
+        cur.close()
+        conn.close()
 
 
 

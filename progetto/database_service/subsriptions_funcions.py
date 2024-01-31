@@ -1,11 +1,20 @@
 from flask import request, jsonify
 import json, logging
+from timelocallogging_wrapper import LocalTimeFormatter
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+# --------------------------------------------------
+formatter = LocalTimeFormatter(
+    fmt='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
+# --------------------------------------------------
 
 def request_get_sottoscrizioni(cur):
     try:
@@ -25,7 +34,7 @@ def request_get_sottoscrizioni(cur):
             })
         return jsonify(subscriptions_list), 200
     except Exception as e:
-        logging.error(f"Errore durante la richiesta delle sottoscrizioni: {e}")
+        logger.error(f"Errore durante la richiesta delle sottoscrizioni: {e}")
         return jsonify({'error': f"Errore durante la richiesta delle sottoscrizioni: {e}"}), 500
     
 def request_post_sottoscrizioni(conn, cur):
@@ -35,7 +44,7 @@ def request_post_sottoscrizioni(conn, cur):
         citta = data.get('citta') 
         condizioni = data.get('condizioni')
         condizioni_json = json.dumps(condizioni)
-        logging.info(f"Inserimento sottoscrizione - User name: {user_name}, chat_id: {citta}, conditions: {condizioni}")
+        logger.info(f"Inserimento sottoscrizione - User name: {user_name}, chat_id: {citta}, conditions: {condizioni}")
 
         cur.execute("INSERT INTO subscriptions (user_name, citta, condizioni) VALUES (%s, %s, %s)",
                     (user_name, citta, condizioni_json))
@@ -44,7 +53,7 @@ def request_post_sottoscrizioni(conn, cur):
         return jsonify({'message': 'Sottoscrizione creata con successo!'}), 201
     except Exception as e:
         conn.rollback()  # Annulla la transazione in caso di errore
-        logging.error(f"Errore durante l'inserimento della sottoscrizione: {e}")
+        logger.error(f"Errore durante l'inserimento della sottoscrizione: {e}")
         return jsonify({'error': f"Errore durante l'inserimento della sottoscrizione: {e}"}), 500
 
 def request_put_sottoscrizioni(conn, cur):
@@ -57,7 +66,7 @@ def request_put_sottoscrizioni(conn, cur):
         if not user_name or not citta:
             return jsonify({'error': 'Specificare user_name e citta come parametri nella richiesta'}), 400
         
-        logging.info(f"Aggiornamento sottoscrizione - User name: {user_name}, chat_id: {citta}")
+        logger.info(f"Aggiornamento sottoscrizione - User name: {user_name}, chat_id: {citta}")
 
         # Verifico l'esistenza della sottoscrizione
         cur.execute("SELECT * FROM subscriptions WHERE user_name = %s AND citta = %s", (user_name, citta))
@@ -75,7 +84,7 @@ def request_put_sottoscrizioni(conn, cur):
 
     except Exception as e:
         conn.rollback()  # Annulla la transazione in caso di errore
-        logging.error(f"Errore durante l'aggiornamento della sottoscrizione: {e}")
+        logger.error(f"Errore durante l'aggiornamento della sottoscrizione: {e}")
         return jsonify({'error': f"Errore durante l'aggiornamento della sottoscrizione: {e}"}), 500
     
 def verifica_sottoscrizione(cur):
@@ -107,7 +116,7 @@ def cancella_sottoscrizione(conn, cur):
         if not user_name or not citta:
             return jsonify({'error': 'Specificare user_name e citta come parametri nella richiesta'}), 400
         
-        logging.info(f"Cancellazione sottoscrizione - User name: {user_name}, chat_id: {citta}")
+        logger.info(f"Cancellazione sottoscrizione - User name: {user_name}, citta: {citta}")
         cur.execute("DELETE FROM subscriptions WHERE user_name = %s AND citta = %s", (user_name, citta))
         conn.commit()
 

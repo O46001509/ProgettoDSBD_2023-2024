@@ -1,12 +1,25 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
-import time, os
+import time, os, logging
 import requests
-import logging
+from timelocallogging_wrapper import LocalTimeFormatter
 
-# Inizializzazione del logging
-logging.basicConfig(level=logging.INFO)  # Imposta il livello di logging a INFO
 
+# ----------------------------------------------------
+formatter = LocalTimeFormatter(
+    fmt='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
+# ----------------------------------------------------
+
+# attesa nel caso in cui il database-service debba ancora avviarsi.
 time.sleep(4)
 
 DATABASE_SERVICE_URL = "http://database-service:5004"
@@ -34,44 +47,44 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if user_id in user_states:
         if user_states[user_id] == 'awaiting_name':
-            # Controllo se esiste già un utente con questo user_name nel database
+            # Controllo se esiste già un utente con questo user_name nel database.
             check_user_response = requests.get(f"{DATABASE_SERVICE_URL}/verifica_utente", params={'user_name': user_message})
 
             if check_user_response.status_code == 200:
-                # Se l'utente esiste nel database con lo stesso user_name
+                # Se l'utente esiste nel database con lo stesso user_name...
                 await context.bot.send_message(chat_id=update.effective_chat.id, text="This user_name already exists. Enter a new user_name if you want, else enter a new user_name and then answer NO.")
                 return  # Interrompe ulteriori azioni
             elif check_user_response.status_code == 404:
                 
-                # Recupero l'utente dal database usando il chat_id
+                # ...recupero l'utente dal database usando il chat_id.
                 response = requests.get(f"{DATABASE_SERVICE_URL}/recupera_utente", params={'user_name': user_message, 'chat_id': user_id})
 
                 if response.status_code == 200:
                     user_data = response.json()
-                    logging.info(f"Risposta recupero utente: {user_data.get('message', 'Messaggio non presente nel dizionario')}")
-                    # Se l'utente è già presente nel database con lo stesso chat_id
+                    logger.info(f"handle-users --> Risposta recupero utente: {user_data.get('message', 'Messaggio non presente nel dizionario')}")
+                    # Se l'utente è già presente nel database con lo stesso chat_id...
                     existing_user_name = user_data.get('user_name')
                     await context.bot.send_message(chat_id=update.effective_chat.id, text=f"You have already registered with the user_name: {existing_user_name}. You can continue to subscribe to new weather events.")
                     del user_states[user_id]
                 elif response.status_code == 201:
                     user_data = response.json()
-                    logging.info(f"Risposta recupero utente: {user_data.get('message', 'Messaggio non presente nel dizionario')}")
-                    # Se l'utente è già presente nel database con lo stesso chat_id
+                    logger.info(f"handle-users --> Risposta recupero utente: {user_data.get('message', 'Messaggio non presente nel dizionario')}")
+                    # Se l'utente non è già presente nel database con lo stesso chat_id...
                     existing_user_name = user_data.get('user_name')
-                    # Salvo il nome utente nell'oggetto context.user_data
+                    # ...salvo il nome utente nell'oggetto context.user_data.
                     context.user_data['user_name'] = user_message
                     user_states[user_id] = 'awaiting_response_if_update_username'
                     await context.bot.send_message(chat_id=update.effective_chat.id, text=f"You have already registered with the user_name: {existing_user_name}. Do you want to update your user_name or keep the existing one?")
 
                 else:
-                    logging.error(f"Errore nella richiesta /recupera_utente. Codice di stato: {response.status_code}, Contenuto: {response.text}")
+                    logger.error(f"handle-users --> Errore nella richiesta /recupera_utente. Codice di stato: {response.status_code}, Contenuto: {response.text}")
                     
                     context.user_data['user_name'] = user_message
                     user_states[user_id] = 'awaiting_response_interval'
                     await context.bot.send_message(chat_id=update.effective_chat.id, text=f"How often do you want to recive notifications of your subscriptions? Insert it in seconds.")
 
             else:
-                logging.error(f"Errore nella richiesta /verifica_utente. Codice di stato: {check_user_response.status_code}, Contenuto: {check_user_response.text}")
+                logger.error(f"handle-users --> Errore nella richiesta /verifica_utente. Codice di stato: {check_user_response.status_code}, Contenuto: {check_user_response.text}")
                 await context.bot.send_message(chat_id=update.effective_chat.id, text="An error occurred in cheking the user_name. Try again with /start.")
                 del user_states[user_id]
                 return
@@ -108,21 +121,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Your current notification interval is {context.user_data['interval']} seconds. Do you want to update your interval or keep the existing one?")
 
             except requests.exceptions.RequestException as e:
-                logging.error(f"Errore durante il recupero dell'intervallo dell'utente: {e}")
+                logger.error(f"handle-users --> Errore durante il recupero dell'intervallo dell'utente: {e}")
                 await context.bot.send_message(chat_id=update.effective_chat.id, text="An error occurred while fetching your notification interval. Please try again later.")
                 del user_states[user_id]
                 return
 
             if user_message.upper() == 'YES':
 
-                logging.error(f"risposta yes dell'utente {context.user_data.get('user_name')}")
+                logger.error(f"handle-users --> risposta yes dell'utente {context.user_data.get('user_name')}")
                 # Aggiorno il nome utente nel database
                 update_data = {'chat_id': user_id, 'new_user_name': context.user_data.get('user_name')}
                 response = requests.put(f"{DATABASE_SERVICE_URL}/aggiorna_utente", json=update_data)
                 response.raise_for_status()
 
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Great! You have now registered with the new username {context.user_data.get('user_name')}. You can subscribe to new weather events.")
-                #del user_states[user_id]
                 user_states[user_id] = 'awaiting_response_if_update_interval'
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=f"You have interval =  {context.user_data['interval']}.  Do you want to update your interval or keep the existing one?")
 
@@ -141,14 +153,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         elif user_states[user_id] == 'awaiting_response_if_update_interval':
             if user_message.upper() == 'YES':
-                
                 user_states[user_id] = 'awaiting_response_update_interval'
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=f"How often do you want to recive notifications of your subscriptions? Insert it in seconds.")
-
             elif user_message.upper() == 'NO':
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Ok. You can continue to subscribe to new weather events with your interval {context.user_data.get('interval')}.")
                 del user_states[user_id]
-
             else:
                 # Risposta diversa da 'YES' o 'NO'
                 await context.bot.send_message(chat_id=update.effective_chat.id, text="Please respond with 'YES' or 'NO' only.")
@@ -186,7 +195,15 @@ if __name__ == '__main__':
     application.add_handler(start_handler)
     application.add_handler(message_handler)
 
-    # Esecuzione dell'app Telegram in modo separato
+    '''
+    Il bot rimane in ascolto per i messaggi in arrivo e
+    controlla costantemente se ci sono nuovi aggiornamenti 
+    (messaggi, comandi, ecc.) inviati al bot da parte degli 
+    utenti su Telegram. Quando un aggiornamento viene rilevato, 
+    il bot lo elabora e risponde di conseguenza in base agli 
+    handler, CommandHandler e MessageHandler, che abbiamo configurato 
+    sopra. 
+    '''
     application.run_polling()
 
 
