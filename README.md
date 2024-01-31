@@ -168,6 +168,7 @@ Copia il file .env.example come .env, che contiene le variabili d'ambiente del D
 ```bash
 cp .env.example .env
 ```
+Se non presente il file .env o .env.example, quando si scarica il file zip da GitHub, creare il file .env nella directory principale, e inserire ciò che si vede nella sezione "Configurare le Variabili d'Ambiente" del pdf RelazioneProgetto".
 
 ### 3. Build dei Contenitori Docker:
 
@@ -183,7 +184,8 @@ docker-compose up -d
 ```
 
 ### 5. Inizializzazione e risoluzione di eventuali interruzioni del Database:
- Nel caso in cui non dovesse funzionare il servizio postgres o il database-service, entrare nella shell di postgres tramite il comando sottostante:
+
+Nel caso in cui non dovesse funzionare il servizio postgres o il database-service, entrare nella shell di postgres tramite il comando sottostante:
 ```bash
 docker-compose exec -it postgres psql -U postgres
 ```
@@ -193,7 +195,7 @@ Una volta dentro, inserire il seguente comando per accedere al database:
 \c weather_searches
 ```
 
-Dopo di ché, fare il drop delle tabelle presenti. Ex:
+Dopo di che, fare il drop delle tabelle presenti. Ex:
 ```bash
 DROP TABLE sla_violations, sla_definitions, subscriptions, users;
 ```
@@ -202,7 +204,9 @@ Prima di fare il DROP delle tabelle è necessario stoppare, da un altro terminal
 ```bash
 # Recupero id del container database-service
 docker container ls
+```
 
+```bash
 # Stop database-service
 docker stop id_container_database_service
 ```
@@ -210,22 +214,26 @@ docker stop id_container_database_service
 Dopo aver droppato le tabelle è necessario interrompere l'esecuzione dei microservizi e riavviare.
 ```bash
 docker-compose down
+```
 
+```bash
 docker-compose up -d --build
 ```
 
-Se si vuole, invece, solo visualizzare le tabelle è possibile farlo in qualsiasi momento l'app è in esecuzione. Ex:
-```bash
-# Dopo l'accesso al database.
-SELECT * FROM subscriptions;
-```
+Se si vuole, invece, solo visualizzare le tabelle è possibile farlo in qualsiasi momento l'app è in esecuzione. Ex:# Dopo l'accesso al database ```bash SELECT * FROM subscriptions; ```
+Inoltre, se si scarica il zip da GitHub potrebbe esserci il seguente errore dopo la prima esecuzione del programma (a causa di push errate in GitHub che modificano o non inseriscono tutti i file presenti nella cartella locale postgres-data): 
+
+Se presente, interrompere l’esecuzione dei servizi e svuotare la cartella postgres-data, che si trova all’interno della cartella progetto. Dopo aver cancellato tutti i file, riavviare il sistema ```bash docker-compose up -d --build``` ed entrare nel DB (come spiegato sopra). Se dopo l’inserimento del nome del DB col comando ```bash \c weather_searches``` appare questo errore: 
+
+creare il db ```bash CREATE DATABASE weather_searches;```. Fatto questo, riavviare il sistema nuovamente e come si vede anche nel pdf TestEsecuzioneSistema, non ci sarà più l’errore e sarà presente il database. Inoltre, saranno presenti anche le tabelle, anche se vuote.
 
 ### 6. Verifica l'Applicazione:
-L'applicazione sarà ora accessibile agli indirizzi specificati nelle configurazioni, dopo aver verificato che i microservizi siano attivi e funzionanti.
+L'applicazione sarà ora accessibile agli indirizzi specificati nelle configurazioni, dopo aver verificato che i microservizi siano attivi e funzionanti. Seguire a questo punto i passi della sezione Utilizzo.
 
 ### 7. Accesso a strumenti di monitoraggio
 - Prometheus: http://localhost:9091
 - Grafana: http://localhost:3001 (credenziali di default: admin/admin)
+- cAdvisor: http://localhost:8081 
 
 ## Utilizzo
 
@@ -277,7 +285,7 @@ $body = @{
 Invoke-WebRequest -Uri $url -Method Post -Headers $headers -Body $body
 ```
 
-Verifica su Grafana o Prometheus se arrivano degli alert in caso di violazione della metrica SLA.
+Verifica su Grafana o Prometheus se arrivano degli alert in caso di violazione della metrica SLAall'utente (azione descritta nel messaggio di Alert visibile sul bot).
 
 ### 5. Notifiche per Violazioni SLA:
 
@@ -289,13 +297,11 @@ Di seguito, si hanno le parti della relazione del progetto; che sono incluse anc
 
 ## Abstract
 
-Il progetto **ProgettoDSBD_2023-2024** è stato sviluppato come parte del corso di "DISTRIBUTED SYSTEMS AND BIG DATA". L'obiettivo principale è la creazione di un sistema distribuito basato su un'architettura a microservizi, progettato per gestire alcune interazioni utente tramite un bot Telegram e fornire notifiche meteorologiche personalizzate, in funzione del fatto se si verificano le condizioni stabilite durante l'inserimento della sottoscrizione.
-
-L'architettura modulare del sistema permette la scalabilità e la gestione efficace di funzionalità specifiche attraverso servizi dedicati, come il database-service per la memorizzazione dei dati degli utenti e le interazioni con PostgreSQL, il notification-service per l'invio di notifiche, l'handle-users-service per l'interazione con il bot Telegram, durante la fase di registrazione, il data-fetcher per la verifica delle condizioni e l'event-notiier per la gestione delle nuove sottoscrizioni.
-
+Il progetto ***ProgettoDSBD_2023-2024*** è stato sviluppato come parte del corso di "DISTRIBUTED SYSTEMS AND BIG DATA". L'obiettivo principale è la creazione di un sistema distribuito basato su un'architettura a microservizi, progettato per gestire alcune interazioni utente tramite un bot Telegram e fornire notifiche meteorologiche personalizzate, in funzione del fatto se si verificano le condizioni stabilite durante l'inserimento della sottoscrizione.
+L'architettura modulare del sistema permette la scalabilità e la gestione efficace di funzionalità specifiche attraverso servizi dedicati, come il database-service per la memorizzazione dei dati degli utenti e le interazioni con PostgreSQL, il notification-service per l'invio di notifiche, l'handle-users-service per l'interazione con il bot Telegram, durante la fase di registrazione, il data-fetcher per la verifica delle condizioni delle sottoscrizioni e l'event-notifier per la gestione delle nuove sottoscrizioni. Quindi lo sla-manager, servizio essenziale per la verifica delle metriche inserite e l’aggiornamento delle violazioni.
 Inoltre, il sistema implementa il monitoraggio attraverso Prometheus e Grafana, garantendo la visibilità delle metriche chiave del sistema. L'integrazione con OpenWeatherMap consente di fornire informazioni meteorologiche aggiornate.
-
 Le scelte progettuali mirano a garantire una struttura robusta e flessibile, consentendo il facile adattamento del sistema a futuri sviluppi e requisiti.
+
 
 ## Scelte progettuali
 
@@ -311,7 +317,7 @@ L'utilizzo di container Docker è stato scelto per garantire la portabilità del
 La decisione di introdurre un "database-service" dedicato è stata presa per gestire le interazioni con PostgreSQL in modo centralizzato. Questo approccio semplifica la gestione del database, garantendo al contempo una maggiore coerenza nei dati e facilitando eventuali operazioni di scalabilità o migrazione del database.
 
 ### 4. Monitoraggio con Prometheus e Grafana: 
-L'integrazione di Prometheus e Grafana è stata una scelta strategica per garantire il monitoraggio delle prestazioni e delle metriche chiave del sistema. Questi strumenti forniscono una visibilità approfondita sulle attività dei microservizi, facilitando la risoluzione dei problemi e l'ottimizzazione delle prestazioni.
+L'integrazione di Prometheus e Grafana è stata una scelta strategica per garantire il monitoraggio delle prestazioni e delle metriche chiave del sistema. Questi strumenti forniscono una visibilità approfondita sulle attività dei microservizi, facilitando la risoluzione dei problemi e l'ottimizzazione delle prestazioni. Nel nostro caso, usiamo Prometheus per monitorare i servizi che abbiamo e le metriche personalizzate inserite, potendo anche vedere tramite UI lo stato degli Alerts. Abbiamo provato Grafana per poter visualizzare meglio l’andamento di alcuni container, in termini di uso della memoria, di disco e della CPU, oltre a visualizzare anche la metrica personalizzata interval_seconds come varia nel tempo e in base al suo valore quando c’è una violazione oppure no.  
 
 ### 5. Comunicazione tramite API RESTful: 
 Tutte le interazioni tra i microservizi sono gestite tramite API RESTful. Questa scelta favorisce la decentralizzazione e la comunicazione efficiente, consentendo una facile integrazione e scalabilità del sistema.
@@ -320,7 +326,7 @@ Tutte le interazioni tra i microservizi sono gestite tramite API RESTful. Questa
 L'integrazione di un bot Telegram per le notifiche offre un canale di comunicazione efficace e immediato con gli utenti, migliorando l'esperienza complessiva dell'applicazione.
 
 ### 7. Gestione Asincrona con asyncio nel Notification Service: 
-Per ottimizzare l'efficienza del notification-service, è stata adottata l'utilizzo di asyncio per gestire le operazioni di invio delle notifiche in modo asincrono. Questo approccio consente al servizio di gestire un numero maggiore di richieste contemporaneamente, migliorando la reattività complessiva dell'applicazione.
+Tutte le interazioni tra i microservizi sono gestite tramite API RESTful. Questa scelta favorisce la decentralizzazione e la comunicazione efficiente, consentendo una facile integrazione e scalabilità del sistema. Non siamo arrivati ad implementare Kafka, al posto di asyncio o altro, ma molto probabilmente l’avremmo potuto sfruttare per gestire la grande quantità di notifiche inviate a telegram (quindi l’interazione tra il servizio notification-service e il bot telegram).
 
 ### 8. Utilizzo di APSScheduler nel SLA Manager: 
 Per garantire la tempestiva esecuzione delle attività di gestione degli SLA, il servizio SLAManager fa uso del modulo APSScheduler. Questo scheduler offre un meccanismo efficiente per pianificare e eseguire operazioni periodiche, consentendo al servizio di monitorare e rispettare gli accordi di livello di servizio in modo accurato.
@@ -351,6 +357,17 @@ Il sistema ProgettoDSBD_2023-2024 implementa diverse API per gestire interazioni
        - `metric_name` (string): Nome della metrica.
        - `threshold` (int): Il valore soglia che rappresenta il limite massimo accettabile per la metrica SLA.
        - `Description` (string): descrizione della metrica.
+
+4.	Sla-Manager (/sla/status): 
+	- Descrizione: Consente di visualizzare lo stato delle metriche.
+	- Metodo: GET
+	- Endpoint: `http//localhost:5005/sla`
+	
+5.	Sla-Manager (/sla/violations): 
+	- Descrizione: Consente di visualizzare tutte le violazioni presenti.
+	- Metodo: GET.
+	- Endpoint: `http//localhost:5005/sla/violations`
+
 
 ## Autori
 
